@@ -44,7 +44,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- BANCO DE DADOS ---
+# --- BANCO DE DADOS COM CORREÇÃO AUTOMÁTICA DE ESQUEMA ---
 def get_db():
     return sqlite3.connect("sondagem.db")
 
@@ -89,6 +89,17 @@ def init_db():
             material TEXT
         )
     """)
+
+    # Garante que colunas novas existam caso o banco antigo já estivesse criado no servidor
+    colunas_novas = [
+        ("acumulado_m", "REAL"),
+        ("material", "TEXT")
+    ]
+    for nome_col, tipo_col in colunas_novas:
+        try:
+            c.execute(f"ALTER TABLE avancos ADD COLUMN {nome_col} {tipo_col}")
+        except sqlite3.OperationalError:
+            pass # Coluna já existe no banco
 
     # Tabela de Horários / Serviços
     c.execute("""
@@ -229,7 +240,7 @@ if furo_selecionado:
         col5, col6, col7, col8 = st.columns(4)
         sonda = col5.text_input("Modelo Sonda", value=cabecalho[2] or "")
         num_sonda = col6.text_input("Nº Sonda", value=cabecalho[3] or "")
-        azimute = col7.number_number = col7.number_input("Azimute (°)", value=float(cabecalho[7] or 0.0))
+        azimute = col7.number_input("Azimute (°)", value=float(cabecalho[7] or 0.0))
         angulo = col8.number_input("Ângulo (°)", value=float(cabecalho[8] or 0.0))
 
         st.markdown("**Peça de Corte e Revestimento**")
