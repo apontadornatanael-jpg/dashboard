@@ -140,6 +140,16 @@ def calcular_diferenca_horas(inicio, fim):
     except Exception:
         return 0.0
 
+def obter_total_recuperado_existente(furo):
+    if not furo:
+        return 0.0
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT SUM(recuperado_m) FROM avancos WHERE furo = ?", (furo,))
+    res = c.fetchone()[0]
+    conn.close()
+    return res if res is not None else 0.0
+
 # --- GERADOR DE EXCEL FORMATADO ---
 def gerar_excel_boletim(cabecalho, df_avancos, df_horarios, df_insumos):
     wb = openpyxl.Workbook()
@@ -150,7 +160,6 @@ def gerar_excel_boletim(cabecalho, df_avancos, df_horarios, df_insumos):
     # Estilos
     fill_header = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
     fill_sub = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="solid")
-    fill_highlight = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
     font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
     font_bold = Font(name="Calibri", size=11, bold=True)
     font_normal = Font(name="Calibri", size=10)
@@ -287,14 +296,24 @@ if "sb_de" not in st.session_state: st.session_state["sb_de"] = 0.0
 if "sb_ate" not in st.session_state: st.session_state["sb_ate"] = 0.0
 if "sb_recuperado" not in st.session_state: st.session_state["sb_recuperado"] = 0.0
 
-def recalcular_sidebar():
+def recalcular_sidebar(furo=None):
     avanco = max(0.0, st.session_state["sb_ate"] - st.session_state["sb_de"])
     st.session_state["sb_avanco"] = round(avanco, 2)
-    st.session_state["sb_recuperado"] = round(avanco, 2)
-    st.session_state["sb_pct"] = 100.0 if avanco > 0 else 0.0
+    
+    # Se o recuperado não tiver sido ajustado manualmente, assume o valor total do avanço
+    recuperado_atual = st.session_state.get("sb_recuperado", avanco)
+    if "user_changed_recuperado" not in st.session_state or not st.session_state["user_changed_recuperado"]:
+        recuperado_atual = avanco
+        st.session_state["sb_recuperado"] = round(recuperado_atual, 2)
+        
+    rec_anterior = obter_total_recuperado_existente(furo) if furo else 0.0
+    st.session_state["sb_acumulado"] = round(rec_anterior + recuperado_atual, 2)
+    st.session_state["sb_pct"] = round((recuperado_atual / avanco * 100), 2) if avanco > 0 else 0.0
 
 if "sb_avanco" not in st.session_state:
-    recalcular_sidebar()
+    st.session_state["sb_avanco"] = 0.0
+    st.session_state["sb_acumulado"] = 0.0
+    st.session_state["sb_pct"] = 0.0
 
 # --- BARRA LATERAL ---
 with st.sidebar:
@@ -325,35 +344,49 @@ with st.sidebar:
 
     if furo_selecionado:
         st.markdown("---")
-        st.subheader("⛏️ Adicionar Avanço")
-        st.number_input("De (m)", min_value=0.0, step=0.1, key="sb_de", on_change=recalcular_sidebar)
-        st.number_input("Até (m)", min_value=0.0, step=0.1, key="sb_ate", on_change=recalcular_sidebar)
-        st.number_input("Recuperado (m)", min_value=0.0, step=0.1, key="sb_recuperado")
+        st.subheader("⛏️ Adicionar Avanço / Manobra")
+        
+        def on_change_de_ate():
+            st.session_state["user_changed_recuperado"] = False
+            recalcular_sidebar(furo_selecionado)
+
+        def on_change_rec():
+            st.session_state["user_changed_recuperado"] = True
+            recalcular_sidebar(furo_selecionado)
+
+        st.number_input("De (m)", min_value=0.0, step=0.1, key="sb_de", on_change=on_change_de_ate)
+        st.number_input("Até (m)", min_value=0.0, step=0.1, key="sb_ate", on_change=on_change_de_ate)
+        st.number_input("Recuperado (m)", min_value=0.0, step=0.1, key="sb_recuperado", on_change=on_change_rec)
         sb_mat = st.text_input("Material Perfurado", value="")
 
-        col_m1, col_m2 = st.columns(2)
-        col_m1.metric("Avanço", f"{st.session_state['sb_avanco']:.2f} m")
-        col_m2.metric("Recuperação", f"{st.session_state['sb_pct']:.1f}%")
+        recalcular_sidebar(furo_selecionado)
 
-        if st.button("💾 Inserir Avanço", use_container_width=True):
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("Avanço Manobra", f"{st.session_state['sb_avanco']:.2f} m")
+        col_m2.metric("Recuperação Total", f"{st.session_state['sb_acumulado']:.2f} m")
+        st.caption(f"📊 **Recuperação da Manobra:** {st.session_state['sb_pct']:.1f}%")
+
+        if st.button("💾 Inserir Manobra", use_container_width=True):
             if st.session_state["sb_ate"] >= st.session_state["sb_de"]:
                 conn = get_db()
                 c = conn.cursor()
                 c.execute("""
-                    INSERT INTO avancos (furo, de_m, ate_m, avanco_m, recuperado_m, porcentagem, material)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO avancos (furo, de_m, ate_m, avanco_m, recuperado_m, acumulado_m, porcentagem, material)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     furo_selecionado,
                     st.session_state["sb_de"],
                     st.session_state["sb_ate"],
                     st.session_state["sb_avanco"],
                     st.session_state["sb_recuperado"],
+                    st.session_state["sb_acumulado"],
                     st.session_state["sb_pct"],
                     sb_mat
                 ))
                 conn.commit()
                 conn.close()
-                st.success("Avanço registrado!")
+                st.success("Manobra registrada com sucesso!")
+                st.session_state["user_changed_recuperado"] = False
                 st.rerun()
 
 # --- ÁREA PRINCIPAL DO BOLETIM ---
@@ -397,7 +430,7 @@ if furo_selecionado:
             conn.close()
             st.success("Cabeçalho atualizado!")
 
-    # 2. TABELA DE AVANÇOS
+    # 2. TABELA DE AVANÇOS / MANOBRAS
     st.subheader("📊 Perfuração e Recuperação")
     
     if not df_avancos.empty:
@@ -419,19 +452,19 @@ if furo_selecionado:
             "ate_m": st.column_config.NumberColumn("Até (m)", format="%.2f"),
             "avanco_m": st.column_config.NumberColumn("Avanço (m) ⚡", format="%.2f", disabled=True),
             "recuperado_m": st.column_config.NumberColumn("Recuperado (m)", format="%.2f"),
-            "acumulado_m": st.column_config.NumberColumn("Total Acum. (m) ⚡", format="%.2f", disabled=True),
+            "acumulado_m": st.column_config.NumberColumn("Recuperação Total (m) ⚡", format="%.2f", disabled=True),
             "porcentagem": st.column_config.NumberColumn("Recuperação (%) ⚡", format="%.2f %%", disabled=True),
             "material": st.column_config.TextColumn("Material Perfurado"),
         }
     )
 
-    total_av = df_avancos["avanco_m"].sum() if not df_avancos.empty else 0.0
-    total_rec = df_avancos["recuperado_m"].sum() if not df_avancos.empty else 0.0
+    total_av = df_editado_avancos["avanco_m"].sum() if not df_editado_avancos.empty else 0.0
+    total_rec = df_editado_avancos["recuperado_m"].sum() if not df_editado_avancos.empty else 0.0
     rec_med = (total_rec / total_av * 100) if total_av > 0 else 0.0
 
     m1, m2, m3 = st.columns(3)
     m1.metric("Avanço Total do Furo", f"{total_av:.2f} m")
-    m2.metric("Recuperado Total", f"{total_rec:.2f} m")
+    m2.metric("Recuperação Total do Furo", f"{total_rec:.2f} m")
     m3.metric("Recuperação Média", f"{rec_med:.2f} %")
 
     # 3. HORÁRIOS E INSUMOS
@@ -487,11 +520,19 @@ if furo_selecionado:
             c = conn.cursor()
             
             c.execute("DELETE FROM avancos WHERE furo = ?", (furo_selecionado,))
+            
+            # Recalcular os valores acumulados linha por linha antes de salvar no banco
+            acum_corr = 0.0
             for _, row in df_editado_avancos.iterrows():
+                av_m = row["ate_m"] - row["de_m"]
+                rec_m = row["recuperado_m"]
+                acum_corr += rec_m
+                pct = (rec_m / av_m * 100) if av_m > 0 else 0.0
+                
                 c.execute("""
                     INSERT INTO avancos (furo, de_m, ate_m, avanco_m, recuperado_m, acumulado_m, porcentagem, material)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (furo_selecionado, row["de_m"], row["ate_m"], row["ate_m"] - row["de_m"], row["recuperado_m"], row["acumulado_m"], row["porcentagem"], row["material"]))
+                """, (furo_selecionado, row["de_m"], row["ate_m"], av_m, rec_m, acum_corr, pct, row["material"]))
 
             c.execute("DELETE FROM horarios WHERE furo = ?", (furo_selecionado,))
             for _, row in df_editado_horarios.iterrows():
@@ -510,7 +551,7 @@ if furo_selecionado:
 
             conn.commit()
             conn.close()
-            st.success("Dados salvos!")
+            st.success("Dados salvos e atualizados!")
             st.rerun()
 
     with col_btn2:
