@@ -293,7 +293,29 @@ else:
     col_m3.metric("Recuperação Média", f"{pct_media:.2f} %")
 
     st.markdown("---")
+# --- INICIALIZAÇÃO E RECALCULO AUTOMÁTICO ---
+if "sb_de" not in st.session_state:
+    st.session_state["sb_de"] = 0.0
+if "sb_ate" not in st.session_state:
+    st.session_state["sb_ate"] = 0.0
+if "sb_recuperado" not in st.session_state:
+    st.session_state["sb_recuperado"] = 0.0
 
+def recalcular_sidebar():
+    avanco = max(0.0, st.session_state["sb_ate"] - st.session_state["sb_de"])
+    st.session_state["sb_avanco"] = round(avanco, 2)
+    
+    # Preenche o Recuperado igual ao Avanço automaticamente (100% por padrão)
+    st.session_state["sb_recuperado"] = round(avanco, 2)
+    
+    if avanco > 0:
+        pct = (st.session_state["sb_recuperado"] / avanco) * 100
+        st.session_state["sb_pct"] = round(min(100.0, pct), 2)
+    else:
+        st.session_state["sb_pct"] = 0.0
+
+if "sb_avanco" not in st.session_state or "sb_pct" not in st.session_state:
+    recalcular_sidebar()
     # --- EDIÇÃO DIRETA DA TABELA COM CÁLCULOS AUTOMÁTICOS ---
     st.subheader(f"📋 Tabela do Documento: {furo_selecionado}")
 
