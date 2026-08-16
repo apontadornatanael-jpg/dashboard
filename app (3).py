@@ -198,4 +198,91 @@ else:
             recuperado_input = st.number_input(
                 "Recuperado (m)", min_value=0.0, value=0.0, step=0.1
             )
-            btn_salvar = st.form_submit_button("
+            btn_salvar = st.form_submit_button("Salvar Registro")
+
+            if btn_salvar:
+                avanco_calc = max(0.0, ate_input - de_input)
+                pct_calc = (
+                    (recuperado_input / avanco_calc * 100)
+                    if avanco_calc > 0
+                    else 0.0
+                )
+
+                conn = sqlite3.connect("sondagem.db")
+                c = conn.cursor()
+                c.execute(
+                    """
+                    INSERT INTO avancos (data, furo, de_m, ate_m, avanco_m, recuperado_m, porcentagem)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        data_input.strftime("%d/%m/%Y"),
+                        furo_input,
+                        de_input,
+                        ate_input,
+                        avanco_calc,
+                        recuperado_input,
+                        round(pct_calc, 2),
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                st.success("✅ Avanço cadastrado com sucesso!")
+                st.rerun()
+
+    # --- CORPO DO DASHBOARD ---
+    st.title("📊 Boletim de Sondagem Rotativa Interativo")
+
+    # Métricas Principais
+    total_avanco = df_dados["avanco_m"].sum() if not df_dados.empty else 0.0
+    total_recuperado = df_dados["recuperado_m"].sum() if not df_dados.empty else 0.0
+    pct_media = (
+        (total_recuperado / total_avanco * 100) if total_avanco > 0 else 0.0
+    )
+
+    col_m1, col_m2, col_m3 = st.columns(3)
+    col_m1.metric("Avanço Total (m)", f"{total_avanco:.2f} m")
+    col_m2.metric("Recuperado Total (m)", f"{total_recuperado:.2f} m")
+    col_m3.metric("Recuperação Média", f"{pct_media:.2f} %")
+
+    st.markdown("---")
+
+    # Tabela Editável
+    st.subheader("📋 Tabela de Registros (Edição Direta)")
+    df_editado = st.data_editor(
+        df_dados,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="editor_sondagem",
+    )
+
+    if st.button("💾 Salvar Alterações da Tabela"):
+        # Recalcula Avanço e Porcentagem automaticamente
+        df_editado["avanco_m"] = df_editado["ate_m"] - df_editado["de_m"]
+        df_editado["porcentagem"] = (
+            df_editado["recuperado_m"] / df_editado["avanco_m"]
+        ) * 100
+        df_editado["porcentagem"] = df_editado["porcentagem"].fillna(0).round(2)
+
+        atualizar_banco_completo(df_editado)
+        st.success("✅ Alterações salvas no banco de dados!")
+        st.rerun()
+
+    # Gráficos
+    if not df_dados.empty:
+        st.markdown("---")
+        st.subheader("📈 Gráfico de Avanço e Recuperação")
+        fig = px.bar(
+            df_dados,
+            x="id",
+            y=["avanco_m", "recuperado_m"],
+            barmode="group",
+            labels={
+                "value": "Metros (m)",
+                "id": "ID do Registro",
+                "variable": "Métrica",
+            },
+            title="Comparativo de Avanço x Recuperado por Manobra",
+            template="plotly_dark",
+        )
+        st.plotly_chart(fig, use_container_width=True)
