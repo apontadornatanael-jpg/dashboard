@@ -1,22 +1,24 @@
-import streamlit as st
-import pandas as pd
 import sqlite3
-import plotly.express as px
 from datetime import datetime
+import pandas as pd
+import plotly.express as px
+import streamlit as st
 
 # Configuração da página
-st.set_page_config(page_title="Streamlit + Banco de Dados", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="Boletim de Sondagem Rotativa",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
-# --- ESTILIZAÇÃO CSS (Design Iluminado / Glassmorphism) ---
-st.markdown('''
+# --- ESTILIZAÇÃO CSS (Glassmorphism) ---
+st.markdown(
+    """
     <style>
-    /* Fundo Geral */
     .stApp { 
         background: radial-gradient(circle at top left, #1a2035, #0d1117, #05070a); 
         color: #e6edf3; 
     }
-    
-    /* Card de Login Iluminado */
     .login-box {
         background: rgba(22, 27, 34, 0.75);
         backdrop-filter: blur(12px);
@@ -27,8 +29,6 @@ st.markdown('''
         box-shadow: 0 0 25px rgba(56, 139, 253, 0.25);
         margin-top: 50px;
     }
-    
-    /* Métricas Iluminadas (Cards) */
     .stMetric {
         background: rgba(22, 27, 34, 0.8) !important;
         border: 1px solid rgba(88, 166, 255, 0.2) !important;
@@ -36,8 +36,6 @@ st.markdown('''
         padding: 15px !important;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 10px rgba(56, 139, 253, 0.15);
     }
-    
-    /* Botões em Gradiente Neon */
     .stButton>button {
         background: linear-gradient(135deg, #238636 0%, #2ea043 100%) !important;
         color: white !important;
@@ -52,119 +50,216 @@ st.markdown('''
         transform: translateY(-2px);
     }
     </style>
-''', unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
-# --- CADASTRO DE USUÁRIOS E SENHAS ---
-USUARIOS = {
-    "admin": "1234",
-    "natanael": "senha123"
-}
+# --- USUÁRIOS E AUTENTICAÇÃO ---
+USUARIOS = {"admin": "1234", "natanael": "senha123"}
 
-# --- GERENCIAMENTO DE SESSÃO DO LOGIN ---
 if "logado" not in st.session_state:
-    st.session_state["logado"] = False
+  st.session_state["logado"] = False
 if "usuario_atual" not in st.session_state:
-    st.session_state["usuario_atual"] = ""
+  st.session_state["usuario_atual"] = ""
 
 # --- TELA DE LOGIN ---
 if not st.session_state["logado"]:
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown("<div class='login-box'>", unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align: center; color: #58a6ff;'>✨ Acesso ao Sistema</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #8b949e;'>Insira suas credenciais para acessar o Dashboard</p>", unsafe_allow_html=True)
-        
-        with st.form("form_login"):
-            usuario = st.text_input("👤 Usuário")
-            senha = st.text_input("🔑 Senha", type="password")
-            btn_entrar = st.form_submit_button("Entrar no Sistema", use_container_width=True)
-            
-            if btn_entrar:
-                if usuario in USUARIOS and USUARIOS[usuario] == senha:
-                    st.session_state["logado"] = True
-                    st.session_state["usuario_atual"] = usuario
-                    st.success(f"Bem-vindo, {usuario}!")
-                    st.rerun()
-                else:
-                    st.error("❌ Usuário ou senha incorretos.")
-                    
-        st.markdown("</div>", unsafe_allow_html=True)
+  col1, col2, col3 = st.columns([1, 2, 1])
+  with col2:
+    st.markdown("<div class='login-box'>", unsafe_allow_html=True)
+    st.markdown(
+        "<h2 style='text-align: center; color: #58a6ff;'>✨ Acesso ao"
+        " Sistema</h2>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        "<p style='text-align: center; color: #8b949e;'>Insira suas credenciais"
+        " para acessar o Boletim de Sondagem</p>",
+        unsafe_allow_html=True,
+    )
+
+    with st.form("form_login"):
+      usuario = st.text_input("👤 Usuário")
+      senha = st.text_input("🔑 Senha", type="password")
+      btn_entrar = st.form_submit_button(
+          "Entrar no Sistema", use_container_width=True
+      )
+
+      if btn_entrar:
+        if usuario in USUARIOS and USUARIOS[usuario] == senha:
+          st.session_state["logado"] = True
+          st.session_state["usuario_atual"] = usuario
+          st.success(f"Bem-vindo, {usuario}!")
+          st.rerun()
+        else:
+          st.error("❌ Usuário ou senha incorretos.")
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # --- DASHBOARD PRINCIPAL ---
 else:
-    # Sidebar com informações do usuário logado
-    with st.sidebar:
-        st.markdown(f"### 👤 Conectado como:\n**{st.session_state['usuario_atual']}**")
-        if st.button("🚪 Sair / Logout", use_container_width=True):
-            st.session_state["logado"] = False
-            st.session_state["usuario_atual"] = ""
-            st.rerun()
-        st.divider()
 
-    # Funções do Banco de Dados SQLite
-    def init_db():
-        conn = sqlite3.connect('dados.db')
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS registros (
+  def init_db():
+    conn = sqlite3.connect("sondagem.db")
+    c = conn.cursor()
+    c.execute("""
+            CREATE TABLE IF NOT EXISTS avancos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                data_hora TEXT,
-                categoria TEXT,
-                valor REAL,
-                quantidade INTEGER,
-                total REAL
+                data TEXT,
+                furo TEXT,
+                de_m REAL,
+                ate_m REAL,
+                avanco_m REAL,
+                recuperado_m REAL,
+                porcentagem REAL
             )
-        ''')
-        conn.commit()
-        conn.close()
+        """)
+    conn.commit()
 
-    def salvar_registro(cat, val, qtd):
-        conn = sqlite3.connect('dados.db')
-        c = conn.cursor()
-        dh = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        c.execute('INSERT INTO registros (data_hora, categoria, valor, quantidade, total) VALUES (?, ?, ?, ?, ?)',
-                  (dh, cat, val, qtd, val * qtd))
-        conn.commit()
-        conn.close()
+    # Preenchimento automático inicial com os dados extraídos da imagem
+    c.execute("SELECT COUNT(*) FROM avancos")
+    if c.fetchone()[0] == 0:
+      dados_iniciais = [
+          ("14/04/2023", "DHAB 109", 44.10, 47.20, 3.10, 3.10, 100.0),
+          ("14/04/2023", "DHAB 109", 47.20, 50.20, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 50.20, 53.30, 3.10, 3.10, 100.0),
+          ("14/04/2023", "DHAB 109", 53.30, 56.45, 3.15, 3.15, 100.0),
+          ("14/04/2023", "DHAB 109", 56.45, 59.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 59.45, 62.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 62.45, 65.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 65.45, 68.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 68.45, 71.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 71.45, 74.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 74.45, 77.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 77.45, 80.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 80.45, 83.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 83.45, 86.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 86.45, 89.45, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 89.45, 92.50, 3.05, 3.05, 100.0),
+          ("14/04/2023", "DHAB 109", 92.50, 95.50, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 95.50, 98.50, 3.00, 3.00, 100.0),
+          ("14/04/2023", "DHAB 109", 98.50, 101.50, 3.00, 3.00, 100.0),
+      ]
+      c.executemany(
+          """
+                INSERT INTO avancos (data, furo, de_m, ate_m, avanco_m, recuperado_m, porcentagem)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+          dados_iniciais,
+      )
+      conn.commit()
 
-    def carregar_dados():
-        conn = sqlite3.connect('dados.db')
-        df = pd.read_sql_query("SELECT * FROM registros ORDER BY id DESC", conn)
-        conn.close()
-        return df
+    conn.close()
 
-    init_db()
+  def salvar_avanco(data_str, furo, de, ate, recuperado):
+    conn = sqlite3.connect("sondagem.db")
+    c = conn.cursor()
+    avanco = round(ate - de, 2)
+    pct = round((recuperado / avanco) * 100, 2) if avanco > 0 else 0
+    c.execute(
+        """
+            INSERT INTO avancos (data, furo, de_m, ate_m, avanco_m, recuperado_m, porcentagem)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (data_str, furo, de, ate, avanco, recuperado, pct),
+    )
+    conn.commit()
+    conn.close()
 
-    st.title("⚡ Streamlit Dashboard (SQLite Local)")
+  def carregar_dados():
+    conn = sqlite3.connect("sondagem.db")
+    df = pd.read_sql_query("SELECT * FROM avancos ORDER BY id ASC", conn)
+    conn.close()
+    return df
 
-    col_form, col_dash = st.columns([1, 2])
+  init_db()
 
-    with col_form:
-        st.subheader("📝 Preenchimento de Dados")
-        with st.form("form_sqlite"):
-            categoria = st.selectbox("Categoria", ["Tech", "Vendas", "Marketing", "Suporte"])
-            valor = st.number_input("Valor (R$)", min_value=10.0, max_value=5000.0, value=250.0)
-            quantidade = st.slider("Quantidade", 1, 100, 5)
-            enviado = st.form_submit_button("Salvar Registro")
-            
-            if enviado:
-                salvar_registro(categoria, valor, quantidade)
-                st.success("✅ Registro salvo com sucesso!")
-                st.rerun()
+  with st.sidebar:
+    st.markdown(
+        f"### 👤 Conectado como:\n**{st.session_state['usuario_atual']}**"
+    )
+    if st.button("🚪 Sair / Logout", use_container_width=True):
+      st.session_state["logado"] = False
+      st.session_state["usuario_atual"] = ""
+      st.rerun()
+    st.divider()
 
-    with col_dash:
-        st.subheader("📊 Métricas & Gráficos")
-        df = carregar_dados()
-        if not df.empty:
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Total Acumulado", f"R$ {df['total'].sum():,.2f}")
-            m2.metric("Registros", len(df))
-            m3.metric("Média por Item", f"R$ {df['valor'].mean():,.2f}")
-            
-            fig = px.bar(df, x="categoria", y="total", color="categoria", title="Total por Categoria")
-            fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
-            st.plotly_chart(fig, use_container_width=True)
-            st.dataframe(df, use_container_width=True)
+    st.markdown("**📌 Dados Gerais da Sondagem**")
+    st.text("Cliente: ATLAS LITHIUM")
+    st.text("Área: ABELHAS")
+    st.text("Furo Nº: DHAB 109")
+    st.text("Modelo Sonda: LM 75 (Nº 04)")
+    st.text("Sondador: FABIO, Wellington, ANDRE")
+    st.text("Insumos: Óleo Diesel (185L)")
+
+  st.title("⛏️ Boletim de Sondagem Rotativa")
+
+  col_form, col_dash = st.columns([1, 2])
+
+  with col_form:
+    st.subheader("📝 Novo Avanço de Perfuração")
+    with st.form("form_sondagem"):
+      data_input = st.date_input("Data do Boletim", datetime(2023, 4, 14))
+      furo_input = st.text_input("Furo Nº", value="DHAB 109")
+      de_m = st.number_input(
+          "De (m)", min_value=0.0, max_value=500.0, value=101.50, step=0.10
+      )
+      ate_m = st.number_input(
+          "Até (m)", min_value=0.0, max_value=500.0, value=104.50, step=0.10
+      )
+      recuperado_m = st.number_input(
+          "Recuperado (m)",
+          min_value=0.0,
+          max_value=500.0,
+          value=3.00,
+          step=0.10,
+      )
+
+      enviado = st.form_submit_button("Salvar Avanço")
+
+      if enviado:
+        if ate_m > de_m:
+          salvar_avanco(
+              data_input.strftime("%d/%m/%Y"),
+              furo_input,
+              de_m,
+              ate_m,
+              recuperado_m,
+          )
+          st.success("✅ Trecho gravado com sucesso!")
+          st.rerun()
         else:
-            st.info("Nenhum dado salvo ainda. Preencha o formulário ao lado.")
+          st.error("❌ A profundidade 'Até' deve ser maior que 'De'.")
+
+  with col_dash:
+    st.subheader("📊 Produção e Progresso")
+    df = carregar_dados()
+
+    if not df.empty:
+      m1, m2, m3 = st.columns(3)
+      prof_inicial = df["de_m"].min()
+      prof_final = df["ate_m"].max()
+      total_perfurado = df["avanco_m"].sum()
+
+      m1.metric("Prof. Inicial", f"{prof_inicial:.2f} m")
+      m2.metric("Prof. Final", f"{prof_final:.2f} m")
+      m3.metric("Metros Perfurados", f"{total_perfurado:.2f} m")
+
+      fig = px.bar(
+          df,
+          x="id",
+          y="avanco_m",
+          hover_data=["de_m", "ate_m", "porcentagem"],
+          labels={"id": "Manobra / Trecho", "avanco_m": "Avanço (m)"},
+          title="Avanço por Trecho de Perfuração (m)",
+      )
+      fig.update_layout(
+          template="plotly_dark",
+          paper_bgcolor="rgba(0,0,0,0)",
+          plot_bgcolor="rgba(0,0,0,0)",
+      )
+      st.plotly_chart(fig, use_container_width=True)
+
+      st.markdown("### 📋 Tabela de Registro do Furo")
+      st.dataframe(df, use_container_width=True)
+    else:
+      st.info("Nenhum avanço registrado.")
