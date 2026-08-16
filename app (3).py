@@ -3,6 +3,9 @@ import sqlite3
 from datetime import datetime
 import pandas as pd
 import streamlit as st
+import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -52,7 +55,6 @@ def init_db():
     conn = get_db()
     c = conn.cursor()
     
-    # Tabela principal do boletim / cabeçalho
     c.execute("""
         CREATE TABLE IF NOT EXISTS boletins (
             furo TEXT PRIMARY KEY,
@@ -75,7 +77,6 @@ def init_db():
         )
     """)
 
-    # Tabela de Avanços
     c.execute("""
         CREATE TABLE IF NOT EXISTS avancos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,7 +91,6 @@ def init_db():
         )
     """)
 
-    # Garante que colunas novas existam
     colunas_novas = [
         ("acumulado_m", "REAL"),
         ("material", "TEXT")
@@ -101,7 +101,6 @@ def init_db():
         except sqlite3.OperationalError:
             pass
 
-    # Tabela de Horários / Serviços
     c.execute("""
         CREATE TABLE IF NOT EXISTS horarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,7 +113,6 @@ def init_db():
         )
     """)
 
-    # Tabela de Insumos
     c.execute("""
         CREATE TABLE IF NOT EXISTS insumos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -137,10 +135,132 @@ def calcular_diferenca_horas(inicio, fim):
         t2 = datetime.strptime(str(fim).strip(), fmt)
         diff = (t2 - t1).total_seconds() / 3600.0
         if diff < 0:
-            diff += 24.0  # Para turnos que passam da meia-noite
+            diff += 24.0
         return round(diff, 2)
     except Exception:
         return 0.0
+
+# --- GERADOR DE EXCEL FORMATADO ---
+def gerar_excel_boletim(cabecalho, df_avancos, df_horarios, df_insumos):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Boletim de Sondagem"
+    ws.views.sheetView[0].showGridLines = True
+
+    # Estilos
+    fill_header = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+    fill_sub = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="solid")
+    fill_highlight = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
+    font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    font_bold = Font(name="Calibri", size=11, bold=True)
+    font_normal = Font(name="Calibri", size=10)
+    thin_border = Border(
+        left=Side(style='thin', color='D9D9D9'),
+        right=Side(style='thin', color='D9D9D9'),
+        top=Side(style='thin', color='D9D9D9'),
+        bottom=Side(style='thin', color='D9D9D9')
+    )
+
+    # Título Principal
+    ws.merge_cells('A1:I1')
+    ws['A1'] = f"BOLETIM DE SONDAGEM ROTATIVA - {cabecalho[0]}"
+    ws['A1'].font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+    ws['A1'].fill = PatternFill(start_color="0F243E", end_color="0F243E", fill_type="solid")
+    ws['A1'].alignment = Alignment(horizontal="center", vertical="center")
+
+    # Cabeçalho de Informações Gerais
+    info_data = [
+        ["Data:", cabecalho[1] or "", "Cliente:", cabecalho[5] or "", "Área:", cabecalho[6] or "", "Turno:", cabecalho[4] or ""],
+        ["Modelo Sonda:", cabecalho[2] or "", "Nº Sonda:", cabecalho[3] or "", "Azimute:", cabecalho[7] or 0, "Ângulo:", cabecalho[8] or 0],
+        ["Diâm. Peça:", cabecalho[9] or "", "Nº Coroa:", cabecalho[10] or "", "Nº Calibrador:", cabecalho[11] or "", "Última Caixa:", cabecalho[15] or 0]
+    ]
+    
+    row_idx = 3
+    for row in info_data:
+        for col_idx, val in enumerate(row, start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.font = font_bold if col_idx % 2 != 0 else font_normal
+            if col_idx % 2 != 0:
+                cell.fill = fill_sub
+            cell.border = thin_border
+        row_idx += 1
+
+    row_idx += 1
+
+    # Tabela de Avanços
+    ws.cell(row=row_idx, column=1, value="PERFURAÇÃO E RECUPERAÇÃO").font = font_bold
+    row_idx += 1
+    
+    cols_av = ["De (m)", "Até (m)", "Avanço (m)", "Recuperado (m)", "Acumulado (m)", "Recuperação (%)", "Material Perfurado"]
+    for c_idx, col_name in enumerate(cols_av, start=1):
+        cell = ws.cell(row=row_idx, column=c_idx, value=col_name)
+        cell.fill = fill_header
+        cell.font = font_header
+        cell.alignment = Alignment(horizontal="center")
+        cell.border = thin_border
+
+    row_idx += 1
+    for _, r in df_avancos.iterrows():
+        ws.cell(row=row_idx, column=1, value=r["de_m"]).border = thin_border
+        ws.cell(row=row_idx, column=2, value=r["ate_m"]).border = thin_border
+        ws.cell(row=row_idx, column=3, value=r["avanco_m"]).border = thin_border
+        ws.cell(row=row_idx, column=4, value=r["recuperado_m"]).border = thin_border
+        ws.cell(row=row_idx, column=5, value=r["acumulado_m"]).border = thin_border
+        
+        c_pct = ws.cell(row=row_idx, column=6, value=f"{r['porcentagem']:.1f}%")
+        c_pct.border = thin_border
+        if r["porcentagem"] < 80.0:
+            c_pct.fill = PatternFill(start_color="FCE4D6", end_color="FCE4D6", fill_type="solid")
+            
+        ws.cell(row=row_idx, column=7, value=r["material"]).border = thin_border
+        row_idx += 1
+
+    row_idx += 2
+
+    # Horários e Insumos lado a lado
+    ws.cell(row=row_idx, column=1, value="DESCRIÇÃO DOS SERVIÇOS").font = font_bold
+    ws.cell(row=row_idx, column=6, value="INSUMOS UTILIZADOS").font = font_bold
+    row_idx += 1
+
+    cols_hor = ["Descrição", "Inicial", "Final", "Tempo (h)", "Horímetro"]
+    for c_idx, col_name in enumerate(cols_hor, start=1):
+        cell = ws.cell(row=row_idx, column=c_idx, value=col_name)
+        cell.fill = fill_header
+        cell.font = font_header
+        cell.border = thin_border
+
+    cols_ins = ["Item / Descrição", "Qtde"]
+    for c_idx, col_name in enumerate(cols_ins, start=6):
+        cell = ws.cell(row=row_idx, column=c_idx, value=col_name)
+        cell.fill = fill_header
+        cell.font = font_header
+        cell.border = thin_border
+
+    start_h_row = row_idx + 1
+    for _, r in df_horarios.iterrows():
+        ws.cell(row=start_h_row, column=1, value=r["descricao"]).border = thin_border
+        ws.cell(row=start_h_row, column=2, value=r["hora_inicio"]).border = thin_border
+        ws.cell(row=start_h_row, column=3, value=r["hora_fim"]).border = thin_border
+        ws.cell(row=start_h_row, column=4, value=r["tempo_horas"]).border = thin_border
+        ws.cell(row=start_h_row, column=5, value=r["horimetro"]).border = thin_border
+        start_h_row += 1
+
+    start_i_row = row_idx + 1
+    for _, r in df_insumos.iterrows():
+        ws.cell(row=start_i_row, column=6, value=r["item"]).border = thin_border
+        ws.cell(row=start_i_row, column=7, value=r["quantidade"]).border = thin_border
+        start_i_row += 1
+
+    # Autoajuste de colunas
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output
 
 # --- FUNÇÕES DE CARREGAMENTO E SALVAMENTO ---
 def obter_furos():
@@ -277,7 +397,7 @@ if furo_selecionado:
             conn.close()
             st.success("Cabeçalho atualizado!")
 
-    # 2. TABELA DE AVANÇOS (PERFURADO E RECUPERAÇÃO)
+    # 2. TABELA DE AVANÇOS
     st.subheader("📊 Perfuração e Recuperação")
     
     if not df_avancos.empty:
@@ -305,7 +425,6 @@ if furo_selecionado:
         }
     )
 
-    # Resumo das Métricas
     total_av = df_avancos["avanco_m"].sum() if not df_avancos.empty else 0.0
     total_rec = df_avancos["recuperado_m"].sum() if not df_avancos.empty else 0.0
     rec_med = (total_rec / total_av * 100) if total_av > 0 else 0.0
@@ -320,8 +439,6 @@ if furo_selecionado:
     
     with col_e1:
         st.subheader("⏱️ Descrição dos Serviços e Horas")
-        
-        # CÁLCULO AUTOMÁTICO DE HORAS
         if not df_horarios.empty:
             df_horarios["tempo_horas"] = df_horarios.apply(
                 lambda r: calcular_diferenca_horas(r["hora_inicio"], r["hora_fim"]), axis=1
@@ -361,40 +478,50 @@ if furo_selecionado:
             }
         )
 
-    # BOTÃO SALVAR GERAL
-    if st.button("💾 Salvar Todas as Alterações da Tabela", use_container_width=True):
-        conn = get_db()
-        c = conn.cursor()
-        
-        # Salva avanços
-        c.execute("DELETE FROM avancos WHERE furo = ?", (furo_selecionado,))
-        for _, row in df_editado_avancos.iterrows():
-            c.execute("""
-                INSERT INTO avancos (furo, de_m, ate_m, avanco_m, recuperado_m, acumulado_m, porcentagem, material)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (furo_selecionado, row["de_m"], row["ate_m"], row["ate_m"] - row["de_m"], row["recuperado_m"], row["acumulado_m"], row["porcentagem"], row["material"]))
+    # BOTÕES DE AÇÃO (SALVAR E EXPORTAR EXCEL)
+    col_btn1, col_btn2 = st.columns(2)
 
-        # Salva horários com horas recalculadas
-        c.execute("DELETE FROM horarios WHERE furo = ?", (furo_selecionado,))
-        for _, row in df_editado_horarios.iterrows():
-            tempo_calc = calcular_diferenca_horas(row["hora_inicio"], row["hora_fim"])
-            c.execute("""
-                INSERT INTO horarios (furo, descricao, hora_inicio, hora_fim, tempo_horas, horimetro)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (furo_selecionado, row["descricao"], row["hora_inicio"], row["hora_fim"], tempo_calc, row["horimetro"]))
+    with col_btn1:
+        if st.button("💾 Salvar Alterações", use_container_width=True):
+            conn = get_db()
+            c = conn.cursor()
+            
+            c.execute("DELETE FROM avancos WHERE furo = ?", (furo_selecionado,))
+            for _, row in df_editado_avancos.iterrows():
+                c.execute("""
+                    INSERT INTO avancos (furo, de_m, ate_m, avanco_m, recuperado_m, acumulado_m, porcentagem, material)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (furo_selecionado, row["de_m"], row["ate_m"], row["ate_m"] - row["de_m"], row["recuperado_m"], row["acumulado_m"], row["porcentagem"], row["material"]))
 
-        # Salva insumos
-        c.execute("DELETE FROM insumos WHERE furo = ?", (furo_selecionado,))
-        for _, row in df_editado_insumos.iterrows():
-            c.execute("""
-                INSERT INTO insumos (furo, item, quantidade)
-                VALUES (?, ?, ?)
-            """, (furo_selecionado, row["item"], row["quantidade"]))
+            c.execute("DELETE FROM horarios WHERE furo = ?", (furo_selecionado,))
+            for _, row in df_editado_horarios.iterrows():
+                tempo_calc = calcular_diferenca_horas(row["hora_inicio"], row["hora_fim"])
+                c.execute("""
+                    INSERT INTO horarios (furo, descricao, hora_inicio, hora_fim, tempo_horas, horimetro)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (furo_selecionado, row["descricao"], row["hora_inicio"], row["hora_fim"], tempo_calc, row["horimetro"]))
 
-        conn.commit()
-        conn.close()
-        st.success("Todos os dados do boletim foram atualizados!")
-        st.rerun()
+            c.execute("DELETE FROM insumos WHERE furo = ?", (furo_selecionado,))
+            for _, row in df_editado_insumos.iterrows():
+                c.execute("""
+                    INSERT INTO insumos (furo, item, quantidade)
+                    VALUES (?, ?, ?)
+                """, (furo_selecionado, row["item"], row["quantidade"]))
+
+            conn.commit()
+            conn.close()
+            st.success("Dados salvos!")
+            st.rerun()
+
+    with col_btn2:
+        excel_data = gerar_excel_boletim(cabecalho, df_editado_avancos, df_editado_horarios, df_editado_insumos)
+        st.download_button(
+            label="📥 Baixar Boletim em Excel Formatado",
+            data=excel_data,
+            file_name=f"Boletim_Sondagem_{furo_selecionado}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
 
 else:
     st.info("Selecione ou crie um novo boletim na barra lateral para iniciar a digitação.")
