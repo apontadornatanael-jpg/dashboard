@@ -190,24 +190,30 @@ else:
         st.markdown("---")
         st.subheader("➕ Adicionar Novo Avanço")
 
-        with st.form("form_novo_avanco"):
-            data_input = st.date_input("Data", datetime.today())
-            furo_input = st.text_input("Furo", value="DHAB 109")
-            de_input = st.number_input("De (m)", min_value=0.0, value=0.0, step=0.1)
-            ate_input = st.number_input("Até (m)", min_value=0.0, value=0.0, step=0.1)
-            recuperado_input = st.number_input(
-                "Recuperado (m)", min_value=0.0, value=0.0, step=0.1
-            )
-            btn_salvar = st.form_submit_button("Salvar Registro")
+        # Entradas do Usuário
+        data_input = st.date_input("Data", datetime.today())
+        furo_input = st.text_input("Furo", value="DHAB 109")
+        de_input = st.number_input("De (m)", min_value=0.0, value=0.0, step=0.1)
+        ate_input = st.number_input("Até (m)", min_value=0.0, value=0.0, step=0.1)
+        recuperado_input = st.number_input(
+            "Recuperado (m)", min_value=0.0, value=0.0, step=0.1
+        )
 
-            if btn_salvar:
-                avanco_calc = max(0.0, ate_input - de_input)
-                pct_calc = (
-                    (recuperado_input / avanco_calc * 100)
-                    if avanco_calc > 0
-                    else 0.0
-                )
+        # CÁLCULOS AUTOMÁTICOS
+        avanco_calc = max(0.0, ate_input - de_input)
+        pct_calc = (
+            (recuperado_input / avanco_calc * 100) if avanco_calc > 0 else 0.0
+        )
 
+        # Exibição dos resultados em tempo real na barra lateral
+        col_sb1, col_sb2 = st.columns(2)
+        col_sb1.metric("Avanço (m)", f"{avanco_calc:.2f} m")
+        col_sb2.metric("Recuperação (%)", f"{pct_calc:.1f}%")
+
+        if st.button("💾 Salvar Registro", use_container_width=True):
+            if ate_input < de_input:
+                st.error("❌ O valor de 'Até' não pode ser menor que 'De'.")
+            else:
                 conn = sqlite3.connect("sondagem.db")
                 c = conn.cursor()
                 c.execute(
@@ -220,7 +226,7 @@ else:
                         furo_input,
                         de_input,
                         ate_input,
-                        avanco_calc,
+                        round(avanco_calc, 2),
                         recuperado_input,
                         round(pct_calc, 2),
                     ),
@@ -250,7 +256,7 @@ else:
     # --- TABELA EDITÁVEL COM CÁLCULO AUTOMÁTICO ---
     st.subheader("📋 Tabela de Registros (Cálculo Automático)")
 
-    # 1. Recalcula os dados atuais antes de passar para o editor
+    # Recalcula dados atuais antes de passar para o editor
     if not df_dados.empty:
         df_dados["avanco_m"] = df_dados["ate_m"] - df_dados["de_m"]
         df_dados["porcentagem"] = df_dados.apply(
@@ -258,7 +264,6 @@ else:
             axis=1
         ).round(2)
 
-    # 2. Configuração interativa com colunas de resultado bloqueadas (disabled=True)
     df_editado = st.data_editor(
         df_dados,
         num_rows="dynamic",
@@ -276,7 +281,6 @@ else:
         }
     )
 
-    # 3. Salva no banco recalculando qualquer nova linha
     if st.button("💾 Salvar Alterações no Banco de Dados"):
         df_editado["avanco_m"] = df_editado["ate_m"] - df_editado["de_m"]
         df_editado["porcentagem"] = df_editado.apply(
