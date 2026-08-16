@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# --- ESTILIZAÇÃO CSS (Design Neon / Glassmorphism) ---
+# --- ESTILIZAÇÃO CSS ---
 st.markdown(
     """
     <style>
@@ -154,16 +154,36 @@ else:
     def salvar_dados_furo(df_novo, furo_atual):
         conn = sqlite3.connect("sondagem.db")
         c = conn.cursor()
-        # Remove os registros antigos apenas do furo em edição
         c.execute("DELETE FROM avancos WHERE furo = ?", (furo_atual,))
         conn.commit()
 
-        # Insere os dados atualizados
         df_novo["furo"] = furo_atual
         df_novo.to_sql("avancos", conn, if_exists="append", index=False)
         conn.close()
 
     init_db()
+
+    # --- INICIALIZAÇÃO DE ESTADOS PARA CÁLCULO AUTOMÁTICO EM TEMPO REAL ---
+    if "sb_de" not in st.session_state:
+        st.session_state["sb_de"] = 0.0
+    if "sb_ate" not in st.session_state:
+        st.session_state["sb_ate"] = 0.0
+    if "sb_recuperado" not in st.session_state:
+        st.session_state["sb_recuperado"] = 0.0
+
+    # Função de callback para recalcular automaticamente
+    def recalcular_sidebar():
+        avanco = max(0.0, st.session_state["sb_ate"] - st.session_state["sb_de"])
+        st.session_state["sb_avanco"] = round(avanco, 2)
+        if avanco > 0:
+            pct = (st.session_state["sb_recuperado"] / avanco) * 100
+            st.session_state["sb_pct"] = round(min(100.0, pct), 2)
+        else:
+            st.session_state["sb_pct"] = 0.0
+
+    # Garante que as chaves de resultado existam
+    if "sb_avanco" not in st.session_state or "sb_pct" not in st.session_state:
+        recalcular_sidebar()
 
     # --- BARRA LATERAL ---
     with st.sidebar:
@@ -177,7 +197,7 @@ else:
 
         st.markdown("---")
         
-        # Seleção / Criação de Documento (Furo)
+        # Seleção / Criação de Documento
         lista_furos = obter_furos()
         furo_selecionado = st.selectbox("📂 Selecione o Documento / Furo:", lista_furos)
 
@@ -200,43 +220,69 @@ else:
                 st.warning("Este furo já existe.")
 
         st.markdown("---")
-        st.subheader("➕ Adicionar Linha Rápida")
-        de_input = st.number_input("De (m)", min_value=0.0, value=0.0, step=0.1)
-        ate_input = st.number_input("Até (m)", min_value=0.0, value=0.0, step=0.1)
-        recuperado_input = st.number_input("Recuperado (m)", min_value=0.0, value=0.0, step=0.1)
+        st.subheader("➕ Adicionar Novo Avanço")
 
-        avanco_calc = max(0.0, ate_input - de_input)
-        pct_calc = (recuperado_input / avanco_calc * 100) if avanco_calc > 0 else 0.0
+        # Entradas Numéricas com disparo de recálculo (on_change)
+        st.number_input(
+            "De (m)",
+            min_value=0.0,
+            step=0.1,
+            key="sb_de",
+            on_change=recalcular_sidebar,
+        )
+        st.number_input(
+            "Até (m)",
+            min_value=0.0,
+            step=0.1,
+            key="sb_ate",
+            on_change=recalcular_sidebar,
+        )
+        st.number_input(
+            "Recuperado (m)",
+            min_value=0.0,
+            step=0.1,
+            key="sb_recuperado",
+            on_change=recalcular_sidebar,
+        )
 
-        if st.button("💾 Inserir neste Furo", use_container_width=True):
-            conn = sqlite3.connect("sondagem.db")
-            c = conn.cursor()
-            c.execute(
-                """
-                INSERT INTO avancos (data, furo, de_m, ate_m, avanco_m, recuperado_m, porcentagem)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-                (
-                    datetime.today().strftime("%d/%m/%Y"),
-                    furo_selecionado,
-                    de_input,
-                    ate_input,
-                    round(avanco_calc, 2),
-                    recuperado_input,
-                    round(pct_calc, 2),
-                ),
-            )
-            conn.commit()
-            conn.close()
-            st.success(f"Registro inserido no furo {furo_selecionado}!")
-            st.rerun()
+        st.markdown("---")
+        # EXIBIÇÃO AUTOMÁTICA DOS CÁLCULOS
+        col_m1, col_m2 = st.columns(2)
+        col_m1.metric("⚡ Avanço (m)", f"{st.session_state['sb_avanco']:.2f} m")
+        col_m2.metric("⚡ Recuperação", f"{st.session_state['sb_pct']:.1f}%")
+
+        if st.button("💾 Inserir Registro", use_container_width=True):
+            if st.session_state["sb_ate"] < st.session_state["sb_de"]:
+                st.error("❌ O valor 'Até' não pode ser menor que 'De'.")
+            else:
+                conn = sqlite3.connect("sondagem.db")
+                c = conn.cursor()
+                c.execute(
+                    """
+                    INSERT INTO avancos (data, furo, de_m, ate_m, avanco_m, recuperado_m, porcentagem)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        datetime.today().strftime("%d/%m/%Y"),
+                        furo_selecionado,
+                        st.session_state["sb_de"],
+                        st.session_state["sb_ate"],
+                        st.session_state["sb_avanco"],
+                        st.session_state["sb_recuperado"],
+                        st.session_state["sb_pct"],
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                st.success(f"Avanço registrado em {furo_selecionado}!")
+                st.rerun()
 
     # --- CARREGAMENTO DOS DADOS DO FURO SELECIONADO ---
     df_furo = carregar_dados_furo(furo_selecionado)
 
     st.title(f"📄 Boletim de Sondagem Rotativa - {furo_selecionado}")
 
-    # Métricas Principais
+    # Métricas Principais do Documento
     total_avanco = df_furo["avanco_m"].sum() if not df_furo.empty else 0.0
     total_recuperado = df_furo["recuperado_m"].sum() if not df_furo.empty else 0.0
     pct_media = (total_recuperado / total_avanco * 100) if total_avanco > 0 else 0.0
@@ -248,8 +294,8 @@ else:
 
     st.markdown("---")
 
-    # --- EDIÇÃO DIRETA DO DOCUMENTO ---
-    st.subheader(f"📋 Edição do Documento: {furo_selecionado}")
+    # --- EDIÇÃO DIRETA DA TABELA COM CÁLCULOS AUTOMÁTICOS ---
+    st.subheader(f"📋 Tabela do Documento: {furo_selecionado}")
 
     if not df_furo.empty:
         df_furo["avanco_m"] = df_furo["ate_m"] - df_furo["de_m"]
@@ -275,21 +321,18 @@ else:
         },
     )
 
-    col_btn1, col_btn2 = st.columns([1, 1])
+    if st.button("💾 Salvar Alterações deste Documento", use_container_width=True):
+        df_editado["avanco_m"] = df_editado["ate_m"] - df_editado["de_m"]
+        df_editado["porcentagem"] = df_editado.apply(
+            lambda row: (row["recuperado_m"] / row["avanco_m"] * 100) if row["avanco_m"] > 0 else 0.0,
+            axis=1,
+        ).round(2)
 
-    with col_btn1:
-        if st.button("💾 Salvar Alterações deste Documento", use_container_width=True):
-            df_editado["avanco_m"] = df_editado["ate_m"] - df_editado["de_m"]
-            df_editado["porcentagem"] = df_editado.apply(
-                lambda row: (row["recuperado_m"] / row["avanco_m"] * 100) if row["avanco_m"] > 0 else 0.0,
-                axis=1,
-            ).round(2)
+        salvar_dados_furo(df_editado, furo_selecionado)
+        st.success(f"Documento '{furo_selecionado}' salvo com os cálculos atualizados!")
+        st.rerun()
 
-            salvar_dados_furo(df_editado, furo_selecionado)
-            st.success(f" Documento '{furo_selecionado}' atualizado e salvo com sucesso!")
-            st.rerun()
-
-    # --- GRÁFICO DO DOCUMENTO ---
+    # --- GRÁFICO DO FURO ---
     if not df_furo.empty:
         st.markdown("---")
         st.subheader("📈 Perfil de Avanço e Recuperação")
