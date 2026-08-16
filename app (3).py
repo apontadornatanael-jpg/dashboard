@@ -163,7 +163,7 @@ else:
 
     init_db()
 
-    # --- INICIALIZAÇÃO DE ESTADOS PARA CÁLCULO AUTOMÁTICO EM TEMPO REAL ---
+    # --- INICIALIZAÇÃO DE ESTADOS DA SIDEBAR ---
     if "sb_de" not in st.session_state:
         st.session_state["sb_de"] = 0.0
     if "sb_ate" not in st.session_state:
@@ -171,7 +171,6 @@ else:
     if "sb_recuperado" not in st.session_state:
         st.session_state["sb_recuperado"] = 0.0
 
-    # Função de callback para recalcular automaticamente
     def recalcular_sidebar():
         avanco = max(0.0, st.session_state["sb_ate"] - st.session_state["sb_de"])
         st.session_state["sb_avanco"] = round(avanco, 2)
@@ -181,7 +180,6 @@ else:
         else:
             st.session_state["sb_pct"] = 0.0
 
-    # Garante que as chaves de resultado existam
     if "sb_avanco" not in st.session_state or "sb_pct" not in st.session_state:
         recalcular_sidebar()
 
@@ -196,7 +194,7 @@ else:
             st.rerun()
 
         st.markdown("---")
-        
+
         # Seleção / Criação de Documento
         lista_furos = obter_furos()
         furo_selecionado = st.selectbox("📂 Selecione o Documento / Furo:", lista_furos)
@@ -222,7 +220,6 @@ else:
         st.markdown("---")
         st.subheader("➕ Adicionar Novo Avanço")
 
-        # Entradas Numéricas com disparo de recálculo (on_change)
         st.number_input(
             "De (m)",
             min_value=0.0,
@@ -246,7 +243,7 @@ else:
         )
 
         st.markdown("---")
-        # EXIBIÇÃO AUTOMÁTICA DOS CÁLCULOS
+        # Exibição dos Cálculos na Sidebar
         col_m1, col_m2 = st.columns(2)
         col_m1.metric("⚡ Avanço (m)", f"{st.session_state['sb_avanco']:.2f} m")
         col_m2.metric("⚡ Recuperação", f"{st.session_state['sb_pct']:.1f}%")
@@ -293,29 +290,7 @@ else:
     col_m3.metric("Recuperação Média", f"{pct_media:.2f} %")
 
     st.markdown("---")
-# --- INICIALIZAÇÃO E RECALCULO AUTOMÁTICO ---
-if "sb_de" not in st.session_state:
-    st.session_state["sb_de"] = 0.0
-if "sb_ate" not in st.session_state:
-    st.session_state["sb_ate"] = 0.0
-if "sb_recuperado" not in st.session_state:
-    st.session_state["sb_recuperado"] = 0.0
 
-def recalcular_sidebar():
-    avanco = max(0.0, st.session_state["sb_ate"] - st.session_state["sb_de"])
-    st.session_state["sb_avanco"] = round(avanco, 2)
-    
-    # Preenche o Recuperado igual ao Avanço automaticamente (100% por padrão)
-    st.session_state["sb_recuperado"] = round(avanco, 2)
-    
-    if avanco > 0:
-        pct = (st.session_state["sb_recuperado"] / avanco) * 100
-        st.session_state["sb_pct"] = round(min(100.0, pct), 2)
-    else:
-        st.session_state["sb_pct"] = 0.0
-
-if "sb_avanco" not in st.session_state or "sb_pct" not in st.session_state:
-    recalcular_sidebar()
     # --- EDIÇÃO DIRETA DA TABELA COM CÁLCULOS AUTOMÁTICOS ---
     st.subheader(f"📋 Tabela do Documento: {furo_selecionado}")
 
