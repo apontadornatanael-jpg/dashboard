@@ -127,7 +127,7 @@ def init_db():
 
 init_db()
 
-# --- FUNÇÕES DE CÁLCULO ---
+# --- FUNÇÕES DE CÁLCULO E APOIO ---
 def calcular_diferenca_horas(inicio, fim):
     try:
         fmt = "%H:%M"
@@ -291,29 +291,11 @@ def carregar_boletim(furo):
     conn.close()
     return cabecalho, df_avancos, df_horarios, df_insumos
 
-# --- INICIALIZAÇÃO DE ESTADOS ---
+# --- INICIALIZAÇÃO DE ESTADOS DA BARRA LATERAL ---
 if "sb_de" not in st.session_state: st.session_state["sb_de"] = 0.0
 if "sb_ate" not in st.session_state: st.session_state["sb_ate"] = 0.0
 if "sb_recuperado" not in st.session_state: st.session_state["sb_recuperado"] = 0.0
-
-def recalcular_sidebar(furo=None):
-    avanco = max(0.0, st.session_state["sb_ate"] - st.session_state["sb_de"])
-    st.session_state["sb_avanco"] = round(avanco, 2)
-    
-    # Se o recuperado não tiver sido ajustado manualmente, assume o valor total do avanço
-    recuperado_atual = st.session_state.get("sb_recuperado", avanco)
-    if "user_changed_recuperado" not in st.session_state or not st.session_state["user_changed_recuperado"]:
-        recuperado_atual = avanco
-        st.session_state["sb_recuperado"] = round(recuperado_atual, 2)
-        
-    rec_anterior = obter_total_recuperado_existente(furo) if furo else 0.0
-    st.session_state["sb_acumulado"] = round(rec_anterior + recuperado_atual, 2)
-    st.session_state["sb_pct"] = round((recuperado_atual / avanco * 100), 2) if avanco > 0 else 0.0
-
-if "sb_avanco" not in st.session_state:
-    st.session_state["sb_avanco"] = 0.0
-    st.session_state["sb_acumulado"] = 0.0
-    st.session_state["sb_pct"] = 0.0
+if "user_changed_recuperado" not in st.session_state: st.session_state["user_changed_recuperado"] = False
 
 # --- BARRA LATERAL ---
 with st.sidebar:
@@ -348,23 +330,28 @@ with st.sidebar:
         
         def on_change_de_ate():
             st.session_state["user_changed_recuperado"] = False
-            recalcular_sidebar(furo_selecionado)
+            novo_avanco = max(0.0, st.session_state["sb_ate"] - st.session_state["sb_de"])
+            st.session_state["sb_recuperado"] = round(novo_avanco, 2)
 
         def on_change_rec():
             st.session_state["user_changed_recuperado"] = True
-            recalcular_sidebar(furo_selecionado)
 
         st.number_input("De (m)", min_value=0.0, step=0.1, key="sb_de", on_change=on_change_de_ate)
         st.number_input("Até (m)", min_value=0.0, step=0.1, key="sb_ate", on_change=on_change_de_ate)
         st.number_input("Recuperado (m)", min_value=0.0, step=0.1, key="sb_recuperado", on_change=on_change_rec)
         sb_mat = st.text_input("Material Perfurado", value="")
 
-        recalcular_sidebar(furo_selecionado)
+        # Cálculos locais dinâmicos sem acionar exceção do Streamlit
+        sb_avanco = max(0.0, round(st.session_state["sb_ate"] - st.session_state["sb_de"], 2))
+        recuperado_val = round(st.session_state["sb_recuperado"], 2)
+        rec_anterior = obter_total_recuperado_existente(furo_selecionado)
+        sb_acumulado = round(rec_anterior + recuperado_val, 2)
+        sb_pct = round((recuperado_val / sb_avanco * 100), 2) if sb_avanco > 0 else 0.0
 
         col_m1, col_m2 = st.columns(2)
-        col_m1.metric("Avanço Manobra", f"{st.session_state['sb_avanco']:.2f} m")
-        col_m2.metric("Recuperação Total", f"{st.session_state['sb_acumulado']:.2f} m")
-        st.caption(f"📊 **Recuperação da Manobra:** {st.session_state['sb_pct']:.1f}%")
+        col_m1.metric("Avanço Manobra", f"{sb_avanco:.2f} m")
+        col_m2.metric("Recuperação Total", f"{sb_acumulado:.2f} m")
+        st.caption(f"📊 **Recuperação da Manobra:** {sb_pct:.1f}%")
 
         if st.button("💾 Inserir Manobra", use_container_width=True):
             if st.session_state["sb_ate"] >= st.session_state["sb_de"]:
@@ -377,10 +364,10 @@ with st.sidebar:
                     furo_selecionado,
                     st.session_state["sb_de"],
                     st.session_state["sb_ate"],
-                    st.session_state["sb_avanco"],
-                    st.session_state["sb_recuperado"],
-                    st.session_state["sb_acumulado"],
-                    st.session_state["sb_pct"],
+                    sb_avanco,
+                    recuperado_val,
+                    sb_acumulado,
+                    sb_pct,
                     sb_mat
                 ))
                 conn.commit()
@@ -521,7 +508,7 @@ if furo_selecionado:
             
             c.execute("DELETE FROM avancos WHERE furo = ?", (furo_selecionado,))
             
-            # Recalcular os valores acumulados linha por linha antes de salvar no banco
+            # Recalcular os acumulados em ordem cronológica antes de salvar
             acum_corr = 0.0
             for _, row in df_editado_avancos.iterrows():
                 av_m = row["ate_m"] - row["de_m"]
