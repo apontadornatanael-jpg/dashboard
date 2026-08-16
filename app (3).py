@@ -90,7 +90,7 @@ def init_db():
         )
     """)
 
-    # Garante que colunas novas existam caso o banco antigo já estivesse criado no servidor
+    # Garante que colunas novas existam
     colunas_novas = [
         ("acumulado_m", "REAL"),
         ("material", "TEXT")
@@ -99,7 +99,7 @@ def init_db():
         try:
             c.execute(f"ALTER TABLE avancos ADD COLUMN {nome_col} {tipo_col}")
         except sqlite3.OperationalError:
-            pass # Coluna já existe no banco
+            pass
 
     # Tabela de Horários / Serviços
     c.execute("""
@@ -128,6 +128,19 @@ def init_db():
     conn.close()
 
 init_db()
+
+# --- FUNÇÕES DE CÁLCULO ---
+def calcular_diferenca_horas(inicio, fim):
+    try:
+        fmt = "%H:%M"
+        t1 = datetime.strptime(str(inicio).strip(), fmt)
+        t2 = datetime.strptime(str(fim).strip(), fmt)
+        diff = (t2 - t1).total_seconds() / 3600.0
+        if diff < 0:
+            diff += 24.0  # Para turnos que passam da meia-noite
+        return round(diff, 2)
+    except Exception:
+        return 0.0
 
 # --- FUNÇÕES DE CARREGAMENTO E SALVAMENTO ---
 def obter_furos():
@@ -268,7 +281,6 @@ if furo_selecionado:
     st.subheader("📊 Perfuração e Recuperação")
     
     if not df_avancos.empty:
-        # Recálculo automático de acumulado e percentual
         df_avancos["avanco_m"] = df_avancos["ate_m"] - df_avancos["de_m"]
         df_avancos["acumulado_m"] = df_avancos["recuperado_m"].cumsum()
         df_avancos["porcentagem"] = df_avancos.apply(
@@ -293,7 +305,7 @@ if furo_selecionado:
         }
     )
 
-    # Resumo das Métricas no Topo da Tabela
+    # Resumo das Métricas
     total_av = df_avancos["avanco_m"].sum() if not df_avancos.empty else 0.0
     total_rec = df_avancos["recuperado_m"].sum() if not df_avancos.empty else 0.0
     rec_med = (total_rec / total_av * 100) if total_av > 0 else 0.0
@@ -308,6 +320,13 @@ if furo_selecionado:
     
     with col_e1:
         st.subheader("⏱️ Descrição dos Serviços e Horas")
+        
+        # CÁLCULO AUTOMÁTICO DE HORAS
+        if not df_horarios.empty:
+            df_horarios["tempo_horas"] = df_horarios.apply(
+                lambda r: calcular_diferenca_horas(r["hora_inicio"], r["hora_fim"]), axis=1
+            )
+
         df_editado_horarios = st.data_editor(
             df_horarios,
             num_rows="dynamic",
@@ -317,12 +336,15 @@ if furo_selecionado:
                 "id": st.column_config.NumberColumn("ID", disabled=True),
                 "furo": st.column_config.TextColumn("Furo", disabled=True),
                 "descricao": st.column_config.TextColumn("Descrição dos Serviços"),
-                "hora_inicio": st.column_config.TextColumn("Inicial"),
-                "hora_fim": st.column_config.TextColumn("Final"),
-                "tempo_horas": st.column_config.NumberColumn("Tempo (h)", format="%.2f"),
+                "hora_inicio": st.column_config.TextColumn("Inicial (HH:MM)"),
+                "hora_fim": st.column_config.TextColumn("Final (HH:MM)"),
+                "tempo_horas": st.column_config.NumberColumn("Tempo (h) ⚡", format="%.2f", disabled=True),
                 "horimetro": st.column_config.TextColumn("Horímetro"),
             }
         )
+
+        total_horas_servico = df_editado_horarios["tempo_horas"].sum() if not df_editado_horarios.empty else 0.0
+        st.caption(f"⏱️ **Total de Horas Registradas:** {total_horas_servico:.2f} h")
 
     with col_e2:
         st.subheader("⛽ Insumos Utilizados")
@@ -352,13 +374,14 @@ if furo_selecionado:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (furo_selecionado, row["de_m"], row["ate_m"], row["ate_m"] - row["de_m"], row["recuperado_m"], row["acumulado_m"], row["porcentagem"], row["material"]))
 
-        # Salva horários
+        # Salva horários com horas recalculadas
         c.execute("DELETE FROM horarios WHERE furo = ?", (furo_selecionado,))
         for _, row in df_editado_horarios.iterrows():
+            tempo_calc = calcular_diferenca_horas(row["hora_inicio"], row["hora_fim"])
             c.execute("""
                 INSERT INTO horarios (furo, descricao, hora_inicio, hora_fim, tempo_horas, horimetro)
                 VALUES (?, ?, ?, ?, ?, ?)
-            """, (furo_selecionado, row["descricao"], row["hora_inicio"], row["hora_fim"], row["tempo_horas"], row["horimetro"]))
+            """, (furo_selecionado, row["descricao"], row["hora_inicio"], row["hora_fim"], tempo_calc, row["horimetro"]))
 
         # Salva insumos
         c.execute("DELETE FROM insumos WHERE furo = ?", (furo_selecionado,))
