@@ -247,25 +247,45 @@ else:
 
     st.markdown("---")
 
-    # Tabela Editável
-    st.subheader("📋 Tabela de Registros (Edição Direta)")
+    # --- TABELA EDITÁVEL COM CÁLCULO AUTOMÁTICO ---
+    st.subheader("📋 Tabela de Registros (Cálculo Automático)")
+
+    # 1. Recalcula os dados atuais antes de passar para o editor
+    if not df_dados.empty:
+        df_dados["avanco_m"] = df_dados["ate_m"] - df_dados["de_m"]
+        df_dados["porcentagem"] = df_dados.apply(
+            lambda r: (r["recuperado_m"] / r["avanco_m"] * 100) if r["avanco_m"] > 0 else 0.0,
+            axis=1
+        ).round(2)
+
+    # 2. Configuração interativa com colunas de resultado bloqueadas (disabled=True)
     df_editado = st.data_editor(
         df_dados,
         num_rows="dynamic",
         use_container_width=True,
         key="editor_sondagem",
+        column_config={
+            "id": st.column_config.NumberColumn("ID", disabled=True),
+            "data": st.column_config.TextColumn("Data"),
+            "furo": st.column_config.TextColumn("Furo"),
+            "de_m": st.column_config.NumberColumn("De (m)", format="%.2f", min_value=0.0),
+            "ate_m": st.column_config.NumberColumn("Até (m)", format="%.2f", min_value=0.0),
+            "avanco_m": st.column_config.NumberColumn("Avanço (m) ⚡", format="%.2f", disabled=True),
+            "recuperado_m": st.column_config.NumberColumn("Recuperado (m)", format="%.2f", min_value=0.0),
+            "porcentagem": st.column_config.NumberColumn("Recuperação (%) ⚡", format="%.2f %%", disabled=True),
+        }
     )
 
-    if st.button("💾 Salvar Alterações da Tabela"):
-        # Recalcula Avanço e Porcentagem automaticamente
+    # 3. Salva no banco recalculando qualquer nova linha
+    if st.button("💾 Salvar Alterações no Banco de Dados"):
         df_editado["avanco_m"] = df_editado["ate_m"] - df_editado["de_m"]
-        df_editado["porcentagem"] = (
-            df_editado["recuperado_m"] / df_editado["avanco_m"]
-        ) * 100
-        df_editado["porcentagem"] = df_editado["porcentagem"].fillna(0).round(2)
+        df_editado["porcentagem"] = df_editado.apply(
+            lambda row: (row["recuperado_m"] / row["avanco_m"] * 100) if row["avanco_m"] > 0 else 0.0,
+            axis=1
+        ).round(2)
 
         atualizar_banco_completo(df_editado)
-        st.success("✅ Alterações salvas no banco de dados!")
+        st.success("✅ Alterações salvas com os cálculos atualizados!")
         st.rerun()
 
     # Gráficos
