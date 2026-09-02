@@ -2738,4 +2738,3 @@ else:
         "👈 Selecione ou crie um novo boletim "
         "na barra lateral para iniciar a digitação."
     )
-```
