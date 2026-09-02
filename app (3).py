@@ -1,2740 +1,645 @@
-import io
+
 import sqlite3
-from datetime import datetime
-
 import pandas as pd
-import streamlit as st
-import openpyxl
+from datetime import date, datetime, time, timedelta
+from io import BytesIO
 
-from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
-from openpyxl.utils import get_column_letter
+st.set_page_config(page_title="DDH Campo", page_icon="⛏️", layout="wide")
 
-
-# ============================================================
-# CONFIGURAÇÃO DA PÁGINA
-# ============================================================
-
-st.set_page_config(
-    page_title="Boletim Digital de Sondagem Rotativa",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
-
-# ============================================================
-# ESTILIZAÇÃO CSS
-# ============================================================
-
-st.markdown(
-    """
-    <style>
-
-    .stApp {
-        background: radial-gradient(circle at top left, #1a2035, #0d1117, #05070a);
-        color: #e6edf3;
-    }
-
-    .stCard, .block-container {
-        background: rgba(22, 27, 34, 0.85);
-        backdrop-filter: blur(14px);
-        border: 1px solid rgba(88, 166, 255, 0.30);
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 20px;
-    }
-
-    .stMetric {
-        background: rgba(22, 27, 34, 0.85) !important;
-        border: 1px solid rgba(88, 166, 255, 0.25) !important;
-        border-radius: 14px !important;
-        padding: 14px !important;
-    }
-
-    .stButton > button {
-        background: linear-gradient(135deg, #238636 0%, #2ea043 100%) !important;
-        color: white !important;
-        border-radius: 8px !important;
-        font-weight: bold !important;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
+DB = "ddh.db"
 
 # ============================================================
 # BANCO DE DADOS
 # ============================================================
+def conn():
+    return sqlite3.connect(DB, check_same_thread=False)
 
-def get_db():
-    return sqlite3.connect("sondagem.db")
+def query(sql, params=()):
+    c = conn()
+    df = pd.read_sql_query(sql, c, params=params)
+    c.close()
+    return df
 
-
-def adicionar_coluna_se_nao_existir(cursor, tabela, coluna, tipo):
-    try:
-        cursor.execute(
-            f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}"
-        )
-    except sqlite3.OperationalError:
-        pass
-
+def execute(sql, params=()):
+    c = conn()
+    cur = c.cursor()
+    cur.execute(sql, params)
+    c.commit()
+    last = cur.lastrowid
+    c.close()
+    return last
 
 def init_db():
+    c = conn()
+    cur = c.cursor()
 
-    conn = get_db()
-    c = conn.cursor()
+    cur.execute("""CREATE TABLE IF NOT EXISTS colaboradores(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        funcao TEXT,
+        matricula TEXT,
+        status TEXT DEFAULT 'Ativo'
+    )""")
 
-    # --------------------------------------------------------
-    # BOLETINS
-    # --------------------------------------------------------
+    cur.execute("""CREATE TABLE IF NOT EXISTS equipes(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        codigo TEXT UNIQUE NOT NULL,
+        nome TEXT NOT NULL,
+        supervisor_id INTEGER,
+        sondador_id INTEGER,
+        auxiliar1_id INTEGER,
+        auxiliar2_id INTEGER,
+        status TEXT DEFAULT 'Ativa'
+    )""")
 
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS boletins (
-            furo TEXT PRIMARY KEY,
-            data TEXT,
-            modelo_sonda TEXT,
-            num_sonda TEXT,
-            turno TEXT,
-            cliente TEXT,
-            area TEXT,
-            azimute REAL,
-            angulo REAL,
-            diam_peca TEXT,
-            coroa_num TEXT,
-            calib_num TEXT,
-            revest_diam TEXT,
-            revest_de REAL,
-            revest_ate REAL,
-            num_caixa INTEGER,
-            observacoes TEXT
-        )
-        """
-    )
+    cur.execute("""CREATE TABLE IF NOT EXISTS sondas(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        codigo TEXT UNIQUE NOT NULL,
+        modelo TEXT,
+        fabricante TEXT,
+        patrimonio TEXT,
+        equipe_id INTEGER,
+        status TEXT DEFAULT 'Operando'
+    )""")
 
-    # --------------------------------------------------------
-    # AVANÇOS
-    # --------------------------------------------------------
+    cur.execute("""CREATE TABLE IF NOT EXISTS furos(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        identificacao TEXT UNIQUE NOT NULL,
+        projeto TEXT,
+        cliente TEXT,
+        local TEXT,
+        coord_e REAL,
+        coord_n REAL,
+        cota REAL,
+        azimute REAL,
+        dip REAL,
+        status TEXT DEFAULT 'Em andamento'
+    )""")
 
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS avancos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            furo TEXT,
-            de_m REAL,
-            ate_m REAL,
-            avanco_m REAL,
-            recuperado_m REAL,
-            acumulado_m REAL,
-            porcentagem REAL,
-            material TEXT
-        )
-        """
-    )
+    cur.execute("""CREATE TABLE IF NOT EXISTS atividades(
+        codigo INTEGER PRIMARY KEY,
+        grupo TEXT NOT NULL,
+        atividade TEXT NOT NULL,
+        classificacao TEXT NOT NULL
+    )""")
 
-    adicionar_coluna_se_nao_existir(
-        c,
-        "avancos",
-        "acumulado_m",
-        "REAL"
-    )
+    cur.execute("""CREATE TABLE IF NOT EXISTS boletins(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        data TEXT NOT NULL,
+        turno TEXT,
+        projeto TEXT,
+        cliente TEXT,
+        sonda_id INTEGER,
+        equipe_id INTEGER,
+        furo_id INTEGER,
+        horimetro_inicial REAL,
+        horimetro_final REAL,
+        observacoes TEXT,
+        criado_em TEXT
+    )""")
 
-    adicionar_coluna_se_nao_existir(
-        c,
-        "avancos",
-        "material",
-        "TEXT"
-    )
+    cur.execute("""CREATE TABLE IF NOT EXISTS manobras(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        boletim_id INTEGER NOT NULL,
+        numero INTEGER,
+        de_m REAL,
+        ate_m REAL,
+        recuperado_m REAL,
+        dip REAL,
+        qaqc TEXT,
+        perfil TEXT,
+        coroa TEXT,
+        revestimento TEXT,
+        fluido TEXT
+    )""")
 
-    # --------------------------------------------------------
-    # HORÁRIOS / ATIVIDADES
-    # --------------------------------------------------------
+    cur.execute("""CREATE TABLE IF NOT EXISTS apontamentos(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        boletim_id INTEGER NOT NULL,
+        codigo_atividade INTEGER,
+        hora_inicio TEXT,
+        hora_fim TEXT,
+        horas REAL,
+        horimetro REAL,
+        observacao TEXT
+    )""")
 
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS horarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            furo TEXT,
-            descricao TEXT,
-            hora_inicio TEXT,
-            hora_fim TEXT,
-            tempo_horas REAL,
-            horimetro TEXT
-        )
-        """
-    )
+    c.commit()
+    c.close()
+    seed_activities()
 
-    # Novas colunas adicionadas sem apagar dados antigos
+def seed_activities():
+    df = query("SELECT COUNT(*) qtd FROM atividades")
+    if int(df.iloc[0]["qtd"]) > 0:
+        return
 
-    adicionar_coluna_se_nao_existir(
-        c,
-        "horarios",
-        "codigo",
-        "TEXT"
-    )
-
-    adicionar_coluna_se_nao_existir(
-        c,
-        "horarios",
-        "grupo",
-        "TEXT"
-    )
-
-    adicionar_coluna_se_nao_existir(
-        c,
-        "horarios",
-        "atividade",
-        "TEXT"
-    )
-
-    adicionar_coluna_se_nao_existir(
-        c,
-        "horarios",
-        "classificacao",
-        "TEXT"
-    )
-
-    adicionar_coluna_se_nao_existir(
-        c,
-        "horarios",
-        "observacao",
-        "TEXT"
-    )
-
-    # --------------------------------------------------------
-    # INSUMOS
-    # --------------------------------------------------------
-
-    c.execute(
-        """
-        CREATE TABLE IF NOT EXISTS insumos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            furo TEXT,
-            item TEXT,
-            quantidade REAL
-        )
-        """
-    )
-
-    conn.commit()
-    conn.close()
-
+    # Base inicial com 27 códigos. A tela Cadastros permite ajustar
+    # qualquer código para ficar exatamente igual à planilha da empresa.
+    rows = [
+        (1,"Segurança e Gestão","DDS / Segurança","SEGURANÇA"),
+        (2,"Administrativo","Reunião / Administrativo","ADMINISTRATIVO"),
+        (3,"Logística","Deslocamento / Logística","APOIO OPERACIONAL"),
+        (4,"Fluidos","Preparação de fluido","APOIO OPERACIONAL"),
+        (5,"Praça e Acesso","Preparação de praça / acesso","APOIO OPERACIONAL"),
+        (6,"Mobilização","Mobilização / desmobilização","APOIO OPERACIONAL"),
+        (7,"Manutenção Preventiva","Manutenção preventiva","MANUTENÇÃO PREVENTIVA"),
+        (8,"Manutenção Corretiva","Manutenção mecânica corretiva","MECÂNICA CORRETIVA"),
+        (9,"Suprimentos","Aguardar / receber suprimentos","PARADA EXTERNA"),
+        (10,"Apoio Externo","Aguardar apoio externo","PARADA EXTERNA"),
+        (11,"Condições Externas","Chuva / condição climática","PARADA EXTERNA"),
+        (12,"Contratante","Aguardar liberação do contratante","PARADA EXTERNA"),
+        (13,"Serviços Especializados","Serviço especializado","APOIO OPERACIONAL"),
+        (14,"Produção","Perfuração","OPERAÇÃO DIRETA"),
+        (15,"Produção","Manobra","OPERAÇÃO DIRETA"),
+        (16,"Produção","Troca de haste / tubo","OPERAÇÃO DIRETA"),
+        (17,"Produção","Condicionamento do furo","OPERAÇÃO DIRETA"),
+        (18,"Produção","Furando e manobrando","OPERAÇÃO DIRETA"),
+        (19,"Operação","Preparação operacional","APOIO OPERACIONAL"),
+        (20,"Operação","Limpeza e organização","APOIO OPERACIONAL"),
+        (21,"Ferramental","Troca de ferramental","APOIO OPERACIONAL"),
+        (22,"Ferramental","Inspeção de ferramental","APOIO OPERACIONAL"),
+        (23,"Revestimento","Instalação / retirada de revestimento","INTERVENÇÃO NO FURO"),
+        (24,"Intervenção","Desvio / intervenção no furo","INTERVENÇÃO NO FURO"),
+        (25,"Intervenção","Obstrução / perda no furo","INTERVENÇÃO NO FURO"),
+        (26,"Segurança e Gestão","Treinamento / gestão","SEGURANÇA"),
+        (27,"Administrativo","Encerramento / relatório","ADMINISTRATIVO"),
+    ]
+    c = conn()
+    c.executemany("INSERT INTO atividades VALUES (?,?,?,?)", rows)
+    c.commit()
+    c.close()
 
 init_db()
 
-
 # ============================================================
-# CADASTRO DE ATIVIDADES
+# FUNÇÕES
 # ============================================================
+def horas_intervalo(inicio, fim):
+    if not inicio or not fim:
+        return 0.0
+    a = datetime.combine(date.today(), inicio)
+    b = datetime.combine(date.today(), fim)
+    if b < a:
+        b += timedelta(days=1)
+    return round((b-a).total_seconds()/3600, 2)
 
-ATIVIDADES_PADRAO = {
+def activity_row(codigo):
+    df = query("SELECT * FROM atividades WHERE codigo=?", (int(codigo),))
+    return df.iloc[0].to_dict() if not df.empty else {}
 
-    "01": {
-        "grupo": "Produção",
-        "atividade": "Furando",
-        "classificacao": "Operação Direta",
-    },
+def entity_options(table, label_col, where=None):
+    sql = f"SELECT * FROM {table}"
+    if where: sql += " WHERE " + where
+    df = query(sql)
+    if df.empty: return df, {}
+    mapping = {int(r["id"]): str(r[label_col]) for _, r in df.iterrows()}
+    return df, mapping
 
-    "02": {
-        "grupo": "Produção",
-        "atividade": "Manobra",
-        "classificacao": "Operação Direta",
-    },
-
-    "03": {
-        "grupo": "Produção",
-        "atividade": "Furando e Manobrando",
-        "classificacao": "Operação Direta",
-    },
-
-    "04": {
-        "grupo": "Apoio",
-        "atividade": "Abastecimento",
-        "classificacao": "Apoio Operacional",
-    },
-
-    "05": {
-        "grupo": "Apoio",
-        "atividade": "Preparação / Organização",
-        "classificacao": "Apoio Operacional",
-    },
-
-    "06": {
-        "grupo": "Manutenção",
-        "atividade": "Manutenção Preventiva",
-        "classificacao": "Manutenção Preventiva",
-    },
-
-    "07": {
-        "grupo": "Manutenção",
-        "atividade": "Manutenção Mecânica",
-        "classificacao": "Mecânica Corretiva",
-    },
-
-    "08": {
-        "grupo": "Externo",
-        "atividade": "Intempéries",
-        "classificacao": "Parada Externa",
-    },
-
-    "09": {
-        "grupo": "Externo",
-        "atividade": "Falta de Água",
-        "classificacao": "Parada Externa",
-    },
-
-    "10": {
-        "grupo": "Furo",
-        "atividade": "Troca de Coroa",
-        "classificacao": "Intervenção no Furo",
-    },
-
-    "11": {
-        "grupo": "Furo",
-        "atividade": "Revestimento",
-        "classificacao": "Intervenção no Furo",
-    },
-
-    "12": {
-        "grupo": "Furo",
-        "atividade": "Limpeza do Furo",
-        "classificacao": "Intervenção no Furo",
-    },
-
-    "13": {
-        "grupo": "Administrativo",
-        "atividade": "Atividade Administrativa",
-        "classificacao": "Administrativo",
-    },
-
-    "14": {
-        "grupo": "Segurança",
-        "atividade": "DDS / APR",
-        "classificacao": "Segurança",
-    },
-
-    "15": {
-        "grupo": "Segurança",
-        "atividade": "Inspeção de Segurança",
-        "classificacao": "Segurança",
-    },
-
-}
-
-
-# ============================================================
-# FUNÇÕES DE CÁLCULO
-# ============================================================
-
-def calcular_diferenca_horas(inicio, fim):
-
+def safe_name(df, col, idv):
+    if pd.isna(idv): return ""
     try:
-
-        if not inicio or not fim:
-            return 0.0
-
-        fmt = "%H:%M"
-
-        t1 = datetime.strptime(
-            str(inicio).strip(),
-            fmt
-        )
-
-        t2 = datetime.strptime(
-            str(fim).strip(),
-            fmt
-        )
-
-        diff = (
-            t2 - t1
-        ).total_seconds() / 3600.0
-
-        # Caso atravesse meia-noite
-
-        if diff < 0:
-            diff += 24.0
-
-        return round(
-            diff,
-            2
-        )
-
+        row = df[df["id"] == int(idv)]
+        return "" if row.empty else str(row.iloc[0][col])
     except Exception:
-        return 0.0
+        return ""
 
+def delete(table, idv):
+    execute(f"DELETE FROM {table} WHERE id=?", (int(idv),))
 
-def obter_total_recuperado_existente(furo):
+def excel_boletim(boletim_id):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
 
-    if not furo:
-        return 0.0
+    b = query("SELECT * FROM boletins WHERE id=?", (boletim_id,)).iloc[0].to_dict()
+    man = query("SELECT * FROM manobras WHERE boletim_id=? ORDER BY numero", (boletim_id,))
+    ap = query("""SELECT p.*, a.grupo, a.atividade, a.classificacao
+                  FROM apontamentos p LEFT JOIN atividades a
+                  ON p.codigo_atividade=a.codigo
+                  WHERE p.boletim_id=? ORDER BY p.id""", (boletim_id,))
 
-    conn = get_db()
+    sondas = query("SELECT * FROM sondas")
+    equipes = query("SELECT * FROM equipes")
+    furos = query("SELECT * FROM furos")
 
-    c = conn.cursor()
-
-    c.execute(
-        """
-        SELECT SUM(recuperado_m)
-        FROM avancos
-        WHERE furo = ?
-        """,
-        (furo,)
-    )
-
-    resultado = c.fetchone()[0]
-
-    conn.close()
-
-    if resultado is None:
-        return 0.0
-
-    return float(resultado)
-
-
-def calcular_resumo_operacional(df_horarios):
-
-    classificacoes = [
-        "Operação Direta",
-        "Apoio Operacional",
-        "Manutenção Preventiva",
-        "Mecânica Corretiva",
-        "Parada Externa",
-        "Intervenção no Furo",
-        "Administrativo",
-        "Segurança",
-    ]
-
-    resumo = {}
-
-    for classificacao in classificacoes:
-
-        if (
-            df_horarios.empty
-            or "classificacao" not in df_horarios.columns
-        ):
-            resumo[classificacao] = 0.0
-
-        else:
-
-            filtro = (
-                df_horarios["classificacao"]
-                .fillna("")
-                .astype(str)
-                .str.strip()
-                == classificacao
-            )
-
-            resumo[classificacao] = round(
-                df_horarios.loc[
-                    filtro,
-                    "tempo_horas"
-                ].sum(),
-                2
-            )
-
-    return resumo
-
-
-# ============================================================
-# EXCEL FORMATADO
-# ============================================================
-
-def gerar_excel_boletim(
-    cabecalho,
-    df_avancos,
-    df_horarios,
-    df_insumos,
-    resumo_operacional,
-):
-
-    wb = openpyxl.Workbook()
-
+    wb = Workbook()
     ws = wb.active
+    ws.title = "BOLETIM_DDH"
 
-    ws.title = "Boletim de Sondagem"
+    dark = PatternFill("solid", fgColor="17365D")
+    light = PatternFill("solid", fgColor="D9EAF7")
+    white = Font(color="FFFFFF", bold=True, size=14)
+    bold = Font(bold=True)
+    thin = Side(style="thin", color="808080")
 
-    ws.views.sheetView[0].showGridLines = True
+    ws.merge_cells("A1:J1")
+    ws["A1"] = "BOLETIM DE SONDAGEM ROTATIVA DIAMANTADA - DDH"
+    ws["A1"].fill = dark
+    ws["A1"].font = white
+    ws["A1"].alignment = Alignment(horizontal="center")
 
+    sonda = safe_name(sondas, "codigo", b.get("sonda_id"))
+    equipe = safe_name(equipes, "codigo", b.get("equipe_id"))
+    furo = safe_name(furos, "identificacao", b.get("furo_id"))
 
-    # --------------------------------------------------------
-    # ESTILOS
-    # --------------------------------------------------------
-
-    fill_header = PatternFill(
-        start_color="1F497D",
-        end_color="1F497D",
-        fill_type="solid"
-    )
-
-    fill_sub = PatternFill(
-        start_color="DCE6F1",
-        end_color="DCE6F1",
-        fill_type="solid"
-    )
-
-    fill_total = PatternFill(
-        start_color="E2F0D9",
-        end_color="E2F0D9",
-        fill_type="solid"
-    )
-
-    font_header = Font(
-        name="Calibri",
-        size=11,
-        bold=True,
-        color="FFFFFF"
-    )
-
-    font_bold = Font(
-        name="Calibri",
-        size=11,
-        bold=True
-    )
-
-    font_normal = Font(
-        name="Calibri",
-        size=10
-    )
-
-    thin_border = Border(
-
-        left=Side(
-            style="thin",
-            color="D9D9D9"
-        ),
-
-        right=Side(
-            style="thin",
-            color="D9D9D9"
-        ),
-
-        top=Side(
-            style="thin",
-            color="D9D9D9"
-        ),
-
-        bottom=Side(
-            style="thin",
-            color="D9D9D9"
-        ),
-
-    )
-
-
-    # --------------------------------------------------------
-    # TÍTULO
-    # --------------------------------------------------------
-
-    ws.merge_cells(
-        "A1:I1"
-    )
-
-    ws["A1"] = (
-        f"BOLETIM DE SONDAGEM ROTATIVA - {cabecalho[0]}"
-    )
-
-    ws["A1"].font = Font(
-        name="Calibri",
-        size=14,
-        bold=True,
-        color="FFFFFF"
-    )
-
-    ws["A1"].fill = PatternFill(
-        start_color="0F243E",
-        end_color="0F243E",
-        fill_type="solid"
-    )
-
-    ws["A1"].alignment = Alignment(
-        horizontal="center",
-        vertical="center"
-    )
-
-
-    # --------------------------------------------------------
-    # CABEÇALHO
-    # --------------------------------------------------------
-
-    info_data = [
-
-        [
-            "Data:",
-            cabecalho[1] or "",
-
-            "Cliente:",
-            cabecalho[5] or "",
-
-            "Área:",
-            cabecalho[6] or "",
-
-            "Turno:",
-            cabecalho[4] or "",
-        ],
-
-        [
-            "Modelo Sonda:",
-            cabecalho[2] or "",
-
-            "Nº Sonda:",
-            cabecalho[3] or "",
-
-            "Azimute:",
-            cabecalho[7] or 0,
-
-            "Ângulo:",
-            cabecalho[8] or 0,
-        ],
-
-        [
-            "Diâm. Peça:",
-            cabecalho[9] or "",
-
-            "Nº Coroa:",
-            cabecalho[10] or "",
-
-            "Nº Calibrador:",
-            cabecalho[11] or "",
-
-            "Última Caixa:",
-            cabecalho[15] or 0,
-        ],
-
+    info = [
+        ("Data", b["data"]), ("Turno", b["turno"]),
+        ("Projeto", b["projeto"]), ("Cliente", b["cliente"]),
+        ("Sonda", sonda), ("Equipe", equipe), ("Furo", furo),
+        ("Horímetro inicial", b["horimetro_inicial"]),
+        ("Horímetro final", b["horimetro_final"]),
     ]
-
-    row_idx = 3
-
-    for row in info_data:
-
-        for col_idx, val in enumerate(
-            row,
-            start=1
-        ):
-
-            cell = ws.cell(
-                row=row_idx,
-                column=col_idx,
-                value=val
-            )
-
-            cell.font = (
-                font_bold
-                if col_idx % 2 != 0
-                else font_normal
-            )
-
-            if col_idx % 2 != 0:
-                cell.fill = fill_sub
-
-            cell.border = thin_border
-
-        row_idx += 1
-
-
-    # --------------------------------------------------------
-    # PERFURAÇÃO
-    # --------------------------------------------------------
-
-    row_idx += 1
-
-    ws.cell(
-        row=row_idx,
-        column=1,
-        value="PERFURAÇÃO E RECUPERAÇÃO"
-    ).font = font_bold
-
-    row_idx += 1
-
-    cols_av = [
-
-        "De (m)",
-        "Até (m)",
-        "Avanço (m)",
-        "Recuperado (m)",
-        "Acumulado (m)",
-        "Recuperação (%)",
-        "Material Perfurado",
-
-    ]
-
-    for c_idx, col_name in enumerate(
-        cols_av,
-        start=1
-    ):
-
-        cell = ws.cell(
-            row=row_idx,
-            column=c_idx,
-            value=col_name
-        )
-
-        cell.fill = fill_header
-
-        cell.font = font_header
-
-        cell.alignment = Alignment(
-            horizontal="center"
-        )
-
-        cell.border = thin_border
-
-
-    row_idx += 1
-
-    for _, r in df_avancos.iterrows():
-
-        ws.cell(
-            row=row_idx,
-            column=1,
-            value=r["de_m"]
-        ).border = thin_border
-
-        ws.cell(
-            row=row_idx,
-            column=2,
-            value=r["ate_m"]
-        ).border = thin_border
-
-        ws.cell(
-            row=row_idx,
-            column=3,
-            value=r["avanco_m"]
-        ).border = thin_border
-
-        ws.cell(
-            row=row_idx,
-            column=4,
-            value=r["recuperado_m"]
-        ).border = thin_border
-
-        ws.cell(
-            row=row_idx,
-            column=5,
-            value=r["acumulado_m"]
-        ).border = thin_border
-
-
-        c_pct = ws.cell(
-            row=row_idx,
-            column=6,
-            value=f"{r['porcentagem']:.1f}%"
-        )
-
-        c_pct.border = thin_border
-
-        if r["porcentagem"] < 80.0:
-
-            c_pct.fill = PatternFill(
-                start_color="FCE4D6",
-                end_color="FCE4D6",
-                fill_type="solid"
-            )
-
-
-        ws.cell(
-            row=row_idx,
-            column=7,
-            value=r["material"]
-        ).border = thin_border
-
-        row_idx += 1
-
-
-    # --------------------------------------------------------
-    # ATIVIDADES
-    # --------------------------------------------------------
-
-    row_idx += 2
-
-    ws.cell(
-        row=row_idx,
-        column=1,
-        value="ATIVIDADES E TEMPOS"
-    ).font = font_bold
-
-    row_idx += 1
-
-
-    cols_hor = [
-
-        "Código",
-        "Grupo",
-        "Atividade",
-        "Classificação",
-        "Inicial",
-        "Final",
-        "Tempo (h)",
-        "Horímetro",
-        "Observação",
-
-    ]
-
-
-    for c_idx, col_name in enumerate(
-        cols_hor,
-        start=1
-    ):
-
-        cell = ws.cell(
-            row=row_idx,
-            column=c_idx,
-            value=col_name
-        )
-
-        cell.fill = fill_header
-
-        cell.font = font_header
-
-        cell.border = thin_border
-
-
-    row_idx += 1
-
-
-    for _, r in df_horarios.iterrows():
-
-        valores = [
-
-            r.get("codigo", ""),
-            r.get("grupo", ""),
-            r.get("atividade", ""),
-            r.get("classificacao", ""),
-            r.get("hora_inicio", ""),
-            r.get("hora_fim", ""),
-            r.get("tempo_horas", 0),
-            r.get("horimetro", ""),
-            r.get("observacao", ""),
-
-        ]
-
-
-        for col_idx, valor in enumerate(
-            valores,
-            start=1
-        ):
-
-            cell = ws.cell(
-                row=row_idx,
-                column=col_idx,
-                value=valor
-            )
-
-            cell.border = thin_border
-
-
-        row_idx += 1
-
-
-    # --------------------------------------------------------
-    # RESUMO OPERACIONAL
-    # --------------------------------------------------------
-
-    row_idx += 2
-
-    ws.cell(
-        row=row_idx,
-        column=1,
-        value="RESUMO OPERACIONAL"
-    ).font = font_bold
-
-    row_idx += 1
-
-
-    ws.cell(
-        row=row_idx,
-        column=1,
-        value="Classificação"
-    )
-
-    ws.cell(
-        row=row_idx,
-        column=2,
-        value="Horas"
-    )
-
-
-    ws.cell(
-        row=row_idx,
-        column=1
-    ).fill = fill_header
-
-    ws.cell(
-        row=row_idx,
-        column=2
-    ).fill = fill_header
-
-    ws.cell(
-        row=row_idx,
-        column=1
-    ).font = font_header
-
-    ws.cell(
-        row=row_idx,
-        column=2
-    ).font = font_header
-
-
-    row_idx += 1
-
-
-    for classificacao, horas in resumo_operacional.items():
-
-        ws.cell(
-            row=row_idx,
-            column=1,
-            value=classificacao
-        )
-
-        ws.cell(
-            row=row_idx,
-            column=2,
-            value=horas
-        )
-
-        ws.cell(
-            row=row_idx,
-            column=1
-        ).border = thin_border
-
-        ws.cell(
-            row=row_idx,
-            column=2
-        ).border = thin_border
-
-        row_idx += 1
-
-
-    # --------------------------------------------------------
-    # INSUMOS
-    # --------------------------------------------------------
-
-    row_idx += 2
-
-    ws.cell(
-        row=row_idx,
-        column=1,
-        value="INSUMOS UTILIZADOS"
-    ).font = font_bold
-
-    row_idx += 1
-
-
-    ws.cell(
-        row=row_idx,
-        column=1,
-        value="Item / Descrição"
-    )
-
-    ws.cell(
-        row=row_idx,
-        column=2,
-        value="Quantidade"
-    )
-
-
-    for coluna in [1, 2]:
-
-        ws.cell(
-            row=row_idx,
-            column=coluna
-        ).fill = fill_header
-
-        ws.cell(
-            row=row_idx,
-            column=coluna
-        ).font = font_header
-
-        ws.cell(
-            row=row_idx,
-            column=coluna
-        ).border = thin_border
-
-
-    row_idx += 1
-
-
-    for _, r in df_insumos.iterrows():
-
-        ws.cell(
-            row=row_idx,
-            column=1,
-            value=r["item"]
-        ).border = thin_border
-
-        ws.cell(
-            row=row_idx,
-            column=2,
-            value=r["quantidade"]
-        ).border = thin_border
-
-        row_idx += 1
-
-
-    # --------------------------------------------------------
-    # AJUSTE DE COLUNAS
-    # --------------------------------------------------------
-
-    for col in ws.columns:
-
-        try:
-
-            max_len = max(
-                len(
-                    str(
-                        cell.value or ""
-                    )
-                )
-                for cell in col
-            )
-
-            col_letter = get_column_letter(
-                col[0].column
-            )
-
-            ws.column_dimensions[
-                col_letter
-            ].width = max(
-                max_len + 3,
-                12
-            )
-
-        except Exception:
-            pass
-
-
-    output = io.BytesIO()
-
-    wb.save(output)
-
-    output.seek(0)
-
-    return output
-
+    r = 3
+    for label, value in info:
+        ws.cell(r,1,label).font = bold
+        ws.cell(r,2,value)
+        r += 1
+
+    r += 1
+    ws.cell(r,1,"MANOBRAS / PERFURAÇÃO").fill = dark
+    ws.cell(r,1).font = white
+    ws.merge_cells(start_row=r,start_column=1,end_row=r,end_column=10)
+    r += 1
+    heads = ["Nº","De (m)","Até (m)","Avanço (m)","Recuperado (m)","Rec. %","DIP","QAQC","Perfil","Fluido"]
+    for c,h in enumerate(heads,1):
+        ws.cell(r,c,h).fill = light
+        ws.cell(r,c).font = bold
+    for _,x in man.iterrows():
+        r += 1
+        av = float(x["ate_m"] or 0) - float(x["de_m"] or 0)
+        rec = (float(x["recuperado_m"] or 0)/av*100) if av else 0
+        vals = [x["numero"],x["de_m"],x["ate_m"],av,x["recuperado_m"],rec,x["dip"],x["qaqc"],x["perfil"],x["fluido"]]
+        for c,v in enumerate(vals,1): ws.cell(r,c,v)
+
+    r += 2
+    ws.cell(r,1,"ATIVIDADES / HORAS").fill = dark
+    ws.cell(r,1).font = white
+    ws.merge_cells(start_row=r,start_column=1,end_row=r,end_column=9)
+    r += 1
+    heads = ["Código","Grupo","Atividade","Classificação","Início","Fim","Horas","Horímetro","Observação"]
+    for c,h in enumerate(heads,1):
+        ws.cell(r,c,h).fill = light
+        ws.cell(r,c).font = bold
+    for _,x in ap.iterrows():
+        r += 1
+        vals = [x["codigo_atividade"],x["grupo"],x["atividade"],x["classificacao"],x["hora_inicio"],x["hora_fim"],x["horas"],x["horimetro"],x["observacao"]]
+        for c,v in enumerate(vals,1): ws.cell(r,c,v)
+
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.border = Border(left=thin,right=thin,top=thin,bottom=thin)
+            cell.alignment = Alignment(vertical="center")
+
+    for i,w in enumerate([12,20,20,18,18,15,12,20,20,20],1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
 
 # ============================================================
-# FUNÇÕES DE CARREGAMENTO
+# SIDEBAR
 # ============================================================
+st.sidebar.title("⛏️ DDH CAMPO")
+page = st.sidebar.radio(
+    "Menu",
+    ["🏠 Painel DDH","📝 Novo Boletim","📋 Boletins Salvos","👷 Colaboradores","👥 Equipes","🔩 Sondas","⚙️ Cadastros"]
+)
 
-def obter_furos():
+# ============================================================
+# PAINEL
+# ============================================================
+if page == "🏠 Painel DDH":
+    st.title("📊 PAINEL DDH")
+    boletins = query("SELECT * FROM boletins")
+    man = query("SELECT * FROM manobras")
+    ap = query("""SELECT p.*, a.classificacao FROM apontamentos p
+                  LEFT JOIN atividades a ON p.codigo_atividade=a.codigo""")
 
-    conn = get_db()
+    metros = 0.0 if man.empty else float((man["ate_m"].fillna(0)-man["de_m"].fillna(0)).sum())
+    rec_total = 0.0 if man.empty else float(man["recuperado_m"].fillna(0).sum())
+    rec_pct = rec_total/metros*100 if metros else 0
+    horas_op = 0.0 if ap.empty else float(ap.loc[ap["classificacao"]=="OPERAÇÃO DIRETA","horas"].fillna(0).sum())
+    horas_mec = 0.0 if ap.empty else float(ap.loc[ap["classificacao"]=="MECÂNICA CORRETIVA","horas"].fillna(0).sum())
+    horas_total = 0.0 if ap.empty else float(ap["horas"].fillna(0).sum())
+    disponibilidade = ((horas_total-horas_mec)/horas_total*100) if horas_total else 0
+    utilizacao = (horas_op/(horas_total-horas_mec)*100) if (horas_total-horas_mec)>0 else 0
+    rop = metros/horas_op if horas_op else 0
 
-    df = pd.read_sql_query(
-        """
-        SELECT furo
-        FROM boletins
-        ORDER BY furo ASC
-        """,
-        conn
-    )
+    c = st.columns(4)
+    c[0].metric("METROS", f"{metros:.2f} m")
+    c[1].metric("RECUPERAÇÃO", f"{rec_pct:.1f}%")
+    c[2].metric("HORAS OPERAÇÃO", f"{horas_op:.2f} h")
+    c[3].metric("ROP", f"{rop:.2f} m/h")
+    c = st.columns(3)
+    c[0].metric("HORAS APONTADAS", f"{horas_total:.2f} h")
+    c[1].metric("MECÂNICA CORRETIVA", f"{horas_mec:.2f} h")
+    c[2].metric("DISPONIBILIDADE", f"{disponibilidade:.1f}%")
 
-    conn.close()
+    st.subheader("Resumo por classificação")
+    if not ap.empty:
+        resumo = ap.groupby("classificacao", dropna=False)["horas"].sum().reset_index()
+        st.bar_chart(resumo.set_index("classificacao"))
+    else:
+        st.info("Ainda não existem apontamentos.")
 
+# ============================================================
+# NOVO BOLETIM
+# ============================================================
+elif page == "📝 Novo Boletim":
+    st.title("📝 NOVO RDO / BOLETIM DDH")
+
+    df_s, map_s = entity_options("sondas","codigo","status != 'Inativa'")
+    df_e, map_e = entity_options("equipes","codigo","status != 'Inativa'")
+    df_f, map_f = entity_options("furos","identificacao")
+
+    if df_s.empty or df_e.empty or df_f.empty:
+        st.warning("Cadastre pelo menos uma Sonda, uma Equipe e um Furo antes de criar o boletim.")
+        st.stop()
+
+    if "boletim_edit_id" not in st.session_state:
+        st.session_state.boletim_edit_id = None
+
+    with st.form("cabecalho"):
+        a,b,c,d = st.columns(4)
+        data_b = a.date_input("Data", value=date.today())
+        turno = b.selectbox("Turno", ["Diurno","Noturno"])
+        sonda_id = c.selectbox("Sonda", list(map_s.keys()), format_func=lambda x: map_s[x])
+        equipe_padrao = None
+        row_s = df_s[df_s["id"]==sonda_id]
+        if not row_s.empty and pd.notna(row_s.iloc[0]["equipe_id"]):
+            equipe_padrao = int(row_s.iloc[0]["equipe_id"])
+        idx_e = list(map_e.keys()).index(equipe_padrao) if equipe_padrao in map_e else 0
+        equipe_id = d.selectbox("Equipe", list(map_e.keys()), index=idx_e, format_func=lambda x: map_e[x])
+
+        a,b,c,d = st.columns(4)
+        furo_id = a.selectbox("Furo", list(map_f.keys()), format_func=lambda x: map_f[x])
+        projeto = b.text_input("Projeto")
+        cliente = c.text_input("Cliente")
+        h_ini = d.number_input("Horímetro Inicial", min_value=0.0, step=0.1)
+        h_fim = st.number_input("Horímetro Final", min_value=0.0, step=0.1)
+        observacoes = st.text_area("Observações gerais")
+
+        salvar = st.form_submit_button("💾 Criar Boletim", type="primary")
+
+    if salvar:
+        if h_fim and h_fim < h_ini:
+            st.error("Horímetro final não pode ser menor que o inicial.")
+        else:
+            bid = execute("""INSERT INTO boletins
+                (data,turno,projeto,cliente,sonda_id,equipe_id,furo_id,horimetro_inicial,horimetro_final,observacoes,criado_em)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (str(data_b),turno,projeto,cliente,int(sonda_id),int(equipe_id),int(furo_id),h_ini,h_fim,observacoes,datetime.now().isoformat()))
+            st.session_state.boletim_edit_id = bid
+            st.success("Boletim criado. Agora adicione manobras e atividades abaixo.")
+            st.rerun()
+
+    bid = st.session_state.boletim_edit_id
+    if bid:
+        st.divider()
+        st.subheader("⛏️ Manobras e Perfuração")
+        with st.form("nova_manobra", clear_on_submit=True):
+            c1,c2,c3,c4 = st.columns(4)
+            numero = c1.number_input("Nº", min_value=1, value=1, step=1)
+            de_m = c2.number_input("De (m)", min_value=0.0, step=0.1)
+            ate_m = c3.number_input("Até (m)", min_value=0.0, step=0.1)
+            recuperado = c4.number_input("Recuperado (m)", min_value=0.0, step=0.01)
+            av = max(0.0, ate_m-de_m)
+            rec = recuperado/av*100 if av else 0
+            st.info(f"Avanço automático: {av:.2f} m | Recuperação automática: {rec:.1f}%")
+            c1,c2,c3,c4,c5 = st.columns(5)
+            dip = c1.number_input("DIP", step=0.1)
+            qaqc = c2.text_input("QAQC")
+            perfil = c3.text_input("Perfil / Diâmetro")
+            coroa = c4.text_input("Coroa / Série")
+            revestimento = c5.text_input("Revestimento")
+            fluido = st.text_input("Tipo de Fluido")
+            add = st.form_submit_button("➕ Adicionar Manobra")
+        if add:
+            if ate_m <= de_m:
+                st.error("O valor 'Até' deve ser maior que 'De'.")
+            elif recuperado > (ate_m-de_m):
+                st.error("A recuperação não pode ser maior que o avanço.")
+            else:
+                execute("""INSERT INTO manobras
+                    (boletim_id,numero,de_m,ate_m,recuperado_m,dip,qaqc,perfil,coroa,revestimento,fluido)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (bid,numero,de_m,ate_m,recuperado,dip,qaqc,perfil,coroa,revestimento,fluido))
+                st.success("Manobra adicionada.")
+                st.rerun()
+
+        dfm = query("SELECT * FROM manobras WHERE boletim_id=? ORDER BY numero",(bid,))
+        if not dfm.empty:
+            view = dfm.copy()
+            view["Avanço"] = view["ate_m"]-view["de_m"]
+            view["Recuperação %"] = (view["recuperado_m"]/view["Avanço"].replace(0,pd.NA)*100).round(1)
+            st.dataframe(view, use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.subheader("⏱️ Atividades e Horários")
+        acts = query("SELECT * FROM atividades ORDER BY codigo")
+        codes = acts["codigo"].tolist()
+        with st.form("nova_atividade", clear_on_submit=True):
+            codigo = st.selectbox("Código da atividade", codes)
+            ar = activity_row(codigo)
+            c1,c2,c3 = st.columns(3)
+            c1.text_input("Grupo", value=ar.get("grupo",""), disabled=True)
+            c2.text_input("Atividade", value=ar.get("atividade",""), disabled=True)
+            c3.text_input("Classificação", value=ar.get("classificacao",""), disabled=True)
+            c1,c2,c3,c4 = st.columns(4)
+            inicio = c1.time_input("Hora inicial", value=time(7,0))
+            fim = c2.time_input("Hora final", value=time(8,0))
+            horas = horas_intervalo(inicio,fim)
+            c3.metric("Tempo automático", f"{horas:.2f} h")
+            horimetro = c4.number_input("Horímetro", min_value=0.0, step=0.1)
+            obs = st.text_input("Observação")
+            add_a = st.form_submit_button("➕ Adicionar Atividade")
+        if add_a:
+            execute("""INSERT INTO apontamentos
+                (boletim_id,codigo_atividade,hora_inicio,hora_fim,horas,horimetro,observacao)
+                VALUES (?,?,?,?,?,?,?)""",
+                (bid,int(codigo),inicio.strftime("%H:%M"),fim.strftime("%H:%M"),horas,horimetro,obs))
+            st.success("Atividade adicionada.")
+            st.rerun()
+
+        dfa = query("""SELECT p.id,p.codigo_atividade,a.grupo,a.atividade,a.classificacao,
+                       p.hora_inicio,p.hora_fim,p.horas,p.horimetro,p.observacao
+                       FROM apontamentos p LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+                       WHERE p.boletim_id=? ORDER BY p.id""",(bid,))
+        if not dfa.empty:
+            st.dataframe(dfa, use_container_width=True, hide_index=True)
+
+        st.divider()
+        if st.button("📥 Gerar Excel deste Boletim", type="primary"):
+            st.download_button(
+                "⬇️ Baixar Excel",
+                excel_boletim(bid),
+                file_name=f"BOLETIM_DDH_{bid}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+# ============================================================
+# BOLETINS
+# ============================================================
+elif page == "📋 Boletins Salvos":
+    st.title("📋 BOLETINS SALVOS")
+    df = query("SELECT * FROM boletins ORDER BY data DESC, id DESC")
     if df.empty:
-        return []
-
-    return df["furo"].tolist()
-
-
-def carregar_boletim(furo):
-
-    conn = get_db()
-
-    c = conn.cursor()
-
-    c.execute(
-        """
-        SELECT *
-        FROM boletins
-        WHERE furo = ?
-        """,
-        (furo,)
-    )
-
-    cabecalho = c.fetchone()
-
-
-    df_avancos = pd.read_sql_query(
-        """
-        SELECT *
-        FROM avancos
-        WHERE furo = ?
-        ORDER BY id ASC
-        """,
-        conn,
-        params=(furo,)
-    )
-
-
-    df_horarios = pd.read_sql_query(
-        """
-        SELECT *
-        FROM horarios
-        WHERE furo = ?
-        ORDER BY id ASC
-        """,
-        conn,
-        params=(furo,)
-    )
-
-
-    df_insumos = pd.read_sql_query(
-        """
-        SELECT *
-        FROM insumos
-        WHERE furo = ?
-        ORDER BY id ASC
-        """,
-        conn,
-        params=(furo,)
-    )
-
-
-    conn.close()
-
-    return (
-        cabecalho,
-        df_avancos,
-        df_horarios,
-        df_insumos
-    )
-
-
-# ============================================================
-# SESSION STATE
-# ============================================================
-
-if "sb_de" not in st.session_state:
-    st.session_state["sb_de"] = 0.0
-
-if "sb_ate" not in st.session_state:
-    st.session_state["sb_ate"] = 0.0
-
-if "sb_recuperado" not in st.session_state:
-    st.session_state["sb_recuperado"] = 0.0
-
-
-# ============================================================
-# BARRA LATERAL
-# ============================================================
-
-with st.sidebar:
-
-    st.title(
-        "📋 Gestão de Boletins"
-    )
-
-
-    lista_furos = obter_furos()
-
-
-    furo_selecionado = (
-        st.selectbox(
-            "📂 Selecionar Boletim Existente:",
-            lista_furos
-        )
-        if lista_furos
-        else None
-    )
-
-
-    st.markdown("---")
-
-    st.subheader(
-        "🆕 Novo Boletim"
-    )
-
-
-    novo_furo_id = st.text_input(
-        "Identificação do Furo",
-        placeholder="Ex: DHAB 109"
-    )
-
-
-    if st.button(
-        "➕ Criar Boletim",
-        use_container_width=True
-    ):
-
-        if novo_furo_id:
-
-            if novo_furo_id not in lista_furos:
-
-                conn = get_db()
-
-                c = conn.cursor()
-
-                c.execute(
-                    """
-                    INSERT INTO boletins
-                    (
-                        furo,
-                        data,
-                        modelo_sonda,
-                        num_sonda,
-                        turno,
-                        cliente,
-                        area,
-                        azimute,
-                        angulo
-                    )
-                    VALUES
-                    (
-                        ?,
-                        ?,
-                        '',
-                        '',
-                        '',
-                        '',
-                        '',
-                        0,
-                        0
-                    )
-                    """,
-                    (
-                        novo_furo_id,
-                        datetime.today().strftime(
-                            "%d/%m/%Y"
-                        ),
-                    )
-                )
-
-
-                conn.commit()
-
-                conn.close()
-
-
-                st.success(
-                    f"Boletim '{novo_furo_id}' criado!"
-                )
-
-                st.rerun()
-
-            else:
-
-                st.warning(
-                    "Este furo já existe."
-                )
-
-
-    # --------------------------------------------------------
-    # ADICIONAR MANOBRA
-    # --------------------------------------------------------
-
-    if furo_selecionado:
-
-        st.markdown("---")
-
-        st.subheader(
-            "⛏️ Adicionar Avanço / Manobra"
-        )
-
-
-        def on_change_de_ate():
-
-            novo_avanco = max(
-                0.0,
-                st.session_state["sb_ate"]
-                - st.session_state["sb_de"]
-            )
-
-            st.session_state[
-                "sb_recuperado"
-            ] = round(
-                novo_avanco,
-                2
-            )
-
-
-        st.number_input(
-            "De (m)",
-            min_value=0.0,
-            step=0.1,
-            key="sb_de",
-            on_change=on_change_de_ate
-        )
-
-
-        st.number_input(
-            "Até (m)",
-            min_value=0.0,
-            step=0.1,
-            key="sb_ate",
-            on_change=on_change_de_ate
-        )
-
-
-        st.number_input(
-            "Recuperado (m)",
-            min_value=0.0,
-            step=0.1,
-            key="sb_recuperado"
-        )
-
-
-        sb_mat = st.text_input(
-            "Material Perfurado",
-            value=""
-        )
-
-
-        sb_avanco = max(
-            0.0,
-            round(
-                st.session_state["sb_ate"]
-                - st.session_state["sb_de"],
-                2
-            )
-        )
-
-
-        recuperado_val = round(
-            st.session_state["sb_recuperado"],
-            2
-        )
-
-
-        rec_anterior = (
-            obter_total_recuperado_existente(
-                furo_selecionado
-            )
-        )
-
-
-        sb_acumulado = round(
-            rec_anterior
-            + recuperado_val,
-            2
-        )
-
-
-        sb_pct = (
-            round(
-                recuperado_val
-                / sb_avanco
-                * 100,
-                2
-            )
-            if sb_avanco > 0
-            else 0.0
-        )
-
-
-        col_m1, col_m2 = st.columns(2)
-
-
-        col_m1.metric(
-            "Avanço Manobra",
-            f"{sb_avanco:.2f} m"
-        )
-
-
-        col_m2.metric(
-            "Recuperação Total",
-            f"{sb_acumulado:.2f} m"
-        )
-
-
-        st.caption(
-            f"📊 Recuperação da Manobra: {sb_pct:.1f}%"
-        )
-
-
-        if st.button(
-            "💾 Inserir Manobra",
-            use_container_width=True
-        ):
-
-            if (
-                st.session_state["sb_ate"]
-                >= st.session_state["sb_de"]
-            ):
-
-                conn = get_db()
-
-                c = conn.cursor()
-
-
-                c.execute(
-                    """
-                    INSERT INTO avancos
-                    (
-                        furo,
-                        de_m,
-                        ate_m,
-                        avanco_m,
-                        recuperado_m,
-                        acumulado_m,
-                        porcentagem,
-                        material
-                    )
-                    VALUES
-                    (
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?,
-                        ?
-                    )
-                    """,
-                    (
-                        furo_selecionado,
-                        st.session_state["sb_de"],
-                        st.session_state["sb_ate"],
-                        sb_avanco,
-                        recuperado_val,
-                        sb_acumulado,
-                        sb_pct,
-                        sb_mat,
-                    )
-                )
-
-
-                conn.commit()
-
-                conn.close()
-
-
-                st.success(
-                    "Manobra registrada com sucesso!"
-                )
-
-                st.rerun()
-
-            else:
-
-                st.error(
-                    "O valor 'Até' não pode ser menor que 'De'."
-                )
-
-
-# ============================================================
-# ÁREA PRINCIPAL
-# ============================================================
-
-if furo_selecionado:
-
-
-    (
-        cabecalho,
-        df_avancos,
-        df_horarios,
-        df_insumos
-    ) = carregar_boletim(
-        furo_selecionado
-    )
-
-
-    st.title(
-        f"📄 Boletim de Sondagem Rotativa: {furo_selecionado}"
-    )
-
-
-    # --------------------------------------------------------
-    # CABEÇALHO
-    # --------------------------------------------------------
-
-    with st.expander(
-        "📌 Informações Gerais do Furo e Equipamento",
-        expanded=True
-    ):
-
-
-        col1, col2, col3, col4 = st.columns(4)
-
-
-        data = col1.text_input(
-            "Data",
-            value=cabecalho[1] or ""
-        )
-
-
-        cliente = col2.text_input(
-            "Cliente",
-            value=cabecalho[5] or ""
-        )
-
-
-        area = col3.text_input(
-            "Área",
-            value=cabecalho[6] or ""
-        )
-
-
-        turno = col4.text_input(
-            "Turno",
-            value=cabecalho[4] or ""
-        )
-
-
-        col5, col6, col7, col8 = st.columns(4)
-
-
-        sonda = col5.text_input(
-            "Modelo Sonda",
-            value=cabecalho[2] or ""
-        )
-
-
-        num_sonda = col6.text_input(
-            "Nº Sonda",
-            value=cabecalho[3] or ""
-        )
-
-
-        azimute = col7.number_input(
-            "Azimute (°)",
-            value=float(
-                cabecalho[7] or 0.0
-            )
-        )
-
-
-        angulo = col8.number_input(
-            "Ângulo / Dip (°)",
-            value=float(
-                cabecalho[8] or 0.0
-            )
-        )
-
-
-        st.markdown(
-            "**Peça de Corte e Revestimento**"
-        )
-
-
-        (
-            col9,
-            col10,
-            col11,
-            col12,
-            col13
-        ) = st.columns(5)
-
-
-        diam_peca = col9.text_input(
-            "Diâm. Peça",
-            value=cabecalho[9] or "NQ"
-        )
-
-
-        coroa = col10.text_input(
-            "Nº Coroa",
-            value=cabecalho[10] or ""
-        )
-
-
-        calib = col11.text_input(
-            "Nº Calibrador",
-            value=cabecalho[11] or ""
-        )
-
-
-        rev_diam = col12.text_input(
-            "Diâm. Revestimento",
-            value=cabecalho[12] or ""
-        )
-
-
-        caixas = col13.number_input(
-            "Última Caixa Nº",
-            value=int(
-                cabecalho[15] or 0
-            )
-        )
-
-
-        if st.button(
-            "💾 Salvar Cabeçalho",
-            use_container_width=True
-        ):
-
-            conn = get_db()
-
-            c = conn.cursor()
-
-
-            c.execute(
-                """
-                UPDATE boletins SET
-
-                    data=?,
-                    cliente=?,
-                    area=?,
-                    turno=?,
-                    modelo_sonda=?,
-                    num_sonda=?,
-                    azimute=?,
-                    angulo=?,
-                    diam_peca=?,
-                    coroa_num=?,
-                    calib_num=?,
-                    revest_diam=?,
-                    num_caixa=?
-
-                WHERE furo=?
-                """,
-                (
-                    data,
-                    cliente,
-                    area,
-                    turno,
-                    sonda,
-                    num_sonda,
-                    azimute,
-                    angulo,
-                    diam_peca,
-                    coroa,
-                    calib,
-                    rev_diam,
-                    caixas,
-                    furo_selecionado,
-                )
-            )
-
-
-            conn.commit()
-
-            conn.close()
-
-
-            st.success(
-                "Cabeçalho atualizado!"
-            )
-
+        st.info("Nenhum boletim salvo.")
+    else:
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        ids = df["id"].tolist()
+        bid = st.selectbox("Selecione um boletim", ids)
+        c1,c2,c3 = st.columns(3)
+        if c1.button("✏️ Abrir para lançamento"):
+            st.session_state.boletim_edit_id = int(bid)
+            st.session_state["page_jump"] = "📝 Novo Boletim"
+            st.info("Abra o menu 'Novo Boletim' para continuar.")
+        c2.download_button("📥 Excel", excel_boletim(int(bid)), file_name=f"BOLETIM_DDH_{bid}.xlsx")
+        if c3.button("🗑️ Excluir boletim"):
+            execute("DELETE FROM manobras WHERE boletim_id=?", (int(bid),))
+            execute("DELETE FROM apontamentos WHERE boletim_id=?", (int(bid),))
+            delete("boletins", bid)
+            st.success("Boletim excluído.")
             st.rerun()
 
-
-    # ========================================================
-    # PERFURAÇÃO
-    # ========================================================
-
-    st.subheader(
-        "📊 Perfuração e Recuperação"
-    )
-
-
-    if not df_avancos.empty:
-
-        df_avancos["avanco_m"] = (
-            df_avancos["ate_m"]
-            - df_avancos["de_m"]
-        )
-
-
-        df_avancos["acumulado_m"] = (
-            df_avancos[
-                "recuperado_m"
-            ].cumsum()
-        )
-
-
-        df_avancos["porcentagem"] = (
-            df_avancos.apply(
-                lambda r:
-                round(
-                    r["recuperado_m"]
-                    / r["avanco_m"]
-                    * 100,
-                    2
-                )
-                if r["avanco_m"] > 0
-                else 0.0,
-                axis=1
-            )
-        )
-
-
-    df_editado_avancos = st.data_editor(
-
-        df_avancos,
-
-        num_rows="dynamic",
-
-        use_container_width=True,
-
-        key=f"editor_av_{furo_selecionado}",
-
-        column_config={
-
-            "id":
-                st.column_config.NumberColumn(
-                    "ID",
-                    disabled=True
-                ),
-
-            "furo":
-                st.column_config.TextColumn(
-                    "Furo",
-                    disabled=True
-                ),
-
-            "de_m":
-                st.column_config.NumberColumn(
-                    "De (m)",
-                    format="%.2f"
-                ),
-
-            "ate_m":
-                st.column_config.NumberColumn(
-                    "Até (m)",
-                    format="%.2f"
-                ),
-
-            "avanco_m":
-                st.column_config.NumberColumn(
-                    "Avanço (m) ⚡",
-                    format="%.2f",
-                    disabled=True
-                ),
-
-            "recuperado_m":
-                st.column_config.NumberColumn(
-                    "Recuperado (m)",
-                    format="%.2f"
-                ),
-
-            "acumulado_m":
-                st.column_config.NumberColumn(
-                    "Recuperação Total (m) ⚡",
-                    format="%.2f",
-                    disabled=True
-                ),
-
-            "porcentagem":
-                st.column_config.NumberColumn(
-                    "Recuperação (%) ⚡",
-                    format="%.2f %%",
-                    disabled=True
-                ),
-
-            "material":
-                st.column_config.TextColumn(
-                    "Material Perfurado"
-                ),
-
-        }
-    )
-
-
-    if not df_editado_avancos.empty:
-
-        df_editado_avancos["avanco_m"] = (
-            df_editado_avancos["ate_m"]
-            - df_editado_avancos["de_m"]
-        )
-
-
-        df_editado_avancos["acumulado_m"] = (
-            df_editado_avancos[
-                "recuperado_m"
-            ].cumsum()
-        )
-
-
-        df_editado_avancos["porcentagem"] = (
-            df_editado_avancos.apply(
-                lambda r:
-                (
-                    r["recuperado_m"]
-                    / r["avanco_m"]
-                    * 100
-                )
-                if r["avanco_m"] > 0
-                else 0.0,
-                axis=1
-            )
-        )
-
-
-    total_av = (
-        df_editado_avancos[
-            "avanco_m"
-        ].sum()
-        if not df_editado_avancos.empty
-        else 0.0
-    )
-
-
-    total_rec = (
-        df_editado_avancos[
-            "recuperado_m"
-        ].sum()
-        if not df_editado_avancos.empty
-        else 0.0
-    )
-
-
-    rec_med = (
-        total_rec
-        / total_av
-        * 100
-        if total_av > 0
-        else 0.0
-    )
-
-
-    m1, m2, m3 = st.columns(3)
-
-
-    m1.metric(
-        "Avanço Total",
-        f"{total_av:.2f} m"
-    )
-
-
-    m2.metric(
-        "Recuperação Total",
-        f"{total_rec:.2f} m"
-    )
-
-
-    m3.metric(
-        "Recuperação Média",
-        f"{rec_med:.2f} %"
-    )
-
-
-    # ========================================================
-    # ATIVIDADES E HORAS
-    # ========================================================
-
-    st.markdown("---")
-
-    st.subheader(
-        "⏱️ Atividades, Serviços e Horas"
-    )
-
-
-    # Garante que todas as colunas existam
-
-    colunas_horarios = {
-
-        "codigo": "",
-        "grupo": "",
-        "atividade": "",
-        "classificacao": "",
-        "descricao": "",
-        "hora_inicio": "",
-        "hora_fim": "",
-        "tempo_horas": 0.0,
-        "horimetro": "",
-        "observacao": "",
-
-    }
-
-
-    for coluna, valor_padrao in colunas_horarios.items():
-
-        if coluna not in df_horarios.columns:
-
-            df_horarios[
-                coluna
-            ] = valor_padrao
-
-
-    if not df_horarios.empty:
-
-        df_horarios["tempo_horas"] = (
-            df_horarios.apply(
-                lambda r:
-                calcular_diferenca_horas(
-                    r["hora_inicio"],
-                    r["hora_fim"]
-                ),
-                axis=1
-            )
-        )
-
-
-    st.info(
-        "💡 Informe o código, a atividade e os horários. "
-        "A duração e os indicadores serão calculados automaticamente."
-    )
-
-
-    df_editado_horarios = st.data_editor(
-
-        df_horarios,
-
-        num_rows="dynamic",
-
-        use_container_width=True,
-
-        key=f"editor_hor_{furo_selecionado}",
-
-        column_config={
-
-            "id":
-                st.column_config.NumberColumn(
-                    "ID",
-                    disabled=True
-                ),
-
-            "furo":
-                st.column_config.TextColumn(
-                    "Furo",
-                    disabled=True
-                ),
-
-            "codigo":
-                st.column_config.SelectboxColumn(
-                    "Código",
-                    options=list(
-                        ATIVIDADES_PADRAO.keys()
-                    )
-                ),
-
-            "grupo":
-                st.column_config.TextColumn(
-                    "Grupo"
-                ),
-
-            "atividade":
-                st.column_config.TextColumn(
-                    "Atividade"
-                ),
-
-            "classificacao":
-                st.column_config.SelectboxColumn(
-                    "Classificação",
-                    options=[
-                        "Operação Direta",
-                        "Apoio Operacional",
-                        "Manutenção Preventiva",
-                        "Mecânica Corretiva",
-                        "Parada Externa",
-                        "Intervenção no Furo",
-                        "Administrativo",
-                        "Segurança",
-                    ]
-                ),
-
-            "descricao":
-                st.column_config.TextColumn(
-                    "Descrição"
-                ),
-
-            "hora_inicio":
-                st.column_config.TextColumn(
-                    "Inicial (HH:MM)"
-                ),
-
-            "hora_fim":
-                st.column_config.TextColumn(
-                    "Final (HH:MM)"
-                ),
-
-            "tempo_horas":
-                st.column_config.NumberColumn(
-                    "Tempo (h) ⚡",
-                    format="%.2f",
-                    disabled=True
-                ),
-
-            "horimetro":
-                st.column_config.TextColumn(
-                    "Horímetro"
-                ),
-
-            "observacao":
-                st.column_config.TextColumn(
-                    "Observação"
-                ),
-
-        }
-    )
-
-
-    # Atualiza automaticamente os dados pelo código
-
-    if not df_editado_horarios.empty:
-
-        for index, row in df_editado_horarios.iterrows():
-
-            codigo = str(
-                row.get(
-                    "codigo",
-                    ""
-                )
-            ).strip()
-
-
-            if codigo in ATIVIDADES_PADRAO:
-
-                info = (
-                    ATIVIDADES_PADRAO[
-                        codigo
-                    ]
-                )
-
-
-                # Só preenche automaticamente
-                # caso os campos estejam vazios
-
-                if not str(
-                    row.get(
-                        "grupo",
-                        ""
-                    )
-                ).strip():
-
-                    df_editado_horarios.at[
-                        index,
-                        "grupo"
-                    ] = info["grupo"]
-
-
-                if not str(
-                    row.get(
-                        "atividade",
-                        ""
-                    )
-                ).strip():
-
-                    df_editado_horarios.at[
-                        index,
-                        "atividade"
-                    ] = info["atividade"]
-
-
-                if not str(
-                    row.get(
-                        "classificacao",
-                        ""
-                    )
-                ).strip():
-
-                    df_editado_horarios.at[
-                        index,
-                        "classificacao"
-                    ] = info["classificacao"]
-
-
-            df_editado_horarios.at[
-                index,
-                "tempo_horas"
-            ] = calcular_diferenca_horas(
-
-                row.get(
-                    "hora_inicio",
-                    ""
-                ),
-
-                row.get(
-                    "hora_fim",
-                    ""
-                )
-
-            )
-
-
-    # ========================================================
-    # RESUMO AUTOMÁTICO
-    # ========================================================
-
-    resumo_operacional = (
-        calcular_resumo_operacional(
-            df_editado_horarios
-        )
-    )
-
-
-    st.markdown("---")
-
-    st.subheader(
-        "📈 Resumo Automático do RDO"
-    )
-
-
-    c1, c2, c3, c4 = st.columns(4)
-
-
-    c1.metric(
-        "🟢 Operação Direta",
-        f"{resumo_operacional['Operação Direta']:.2f} h"
-    )
-
-
-    c2.metric(
-        "🔵 Apoio Operacional",
-        f"{resumo_operacional['Apoio Operacional']:.2f} h"
-    )
-
-
-    c3.metric(
-        "🟡 Manutenção Preventiva",
-        f"{resumo_operacional['Manutenção Preventiva']:.2f} h"
-    )
-
-
-    c4.metric(
-        "🔴 Mecânica Corretiva",
-        f"{resumo_operacional['Mecânica Corretiva']:.2f} h"
-    )
-
-
-    c5, c6, c7, c8 = st.columns(4)
-
-
-    c5.metric(
-        "🟠 Parada Externa",
-        f"{resumo_operacional['Parada Externa']:.2f} h"
-    )
-
-
-    c6.metric(
-        "🟣 Intervenção no Furo",
-        f"{resumo_operacional['Intervenção no Furo']:.2f} h"
-    )
-
-
-    c7.metric(
-        "⚪ Administrativo",
-        f"{resumo_operacional['Administrativo']:.2f} h"
-    )
-
-
-    c8.metric(
-        "🦺 Segurança",
-        f"{resumo_operacional['Segurança']:.2f} h"
-    )
-
-
-    # ========================================================
-    # INDICADORES OPERACIONAIS
-    # ========================================================
-
-    horas_operacao = (
-        resumo_operacional[
-            "Operação Direta"
-        ]
-    )
-
-
-    horas_apoio = (
-        resumo_operacional[
-            "Apoio Operacional"
-        ]
-    )
-
-
-    horas_manut_preventiva = (
-        resumo_operacional[
-            "Manutenção Preventiva"
-        ]
-    )
-
-
-    horas_manut_corretiva = (
-        resumo_operacional[
-            "Mecânica Corretiva"
-        ]
-    )
-
-
-    horas_parada = (
-
-        resumo_operacional[
-            "Apoio Operacional"
-        ]
-
-        +
-
-        resumo_operacional[
-            "Manutenção Preventiva"
-        ]
-
-        +
-
-        resumo_operacional[
-            "Mecânica Corretiva"
-        ]
-
-        +
-
-        resumo_operacional[
-            "Parada Externa"
-        ]
-
-        +
-
-        resumo_operacional[
-            "Intervenção no Furo"
-        ]
-
-        +
-
-        resumo_operacional[
-            "Administrativo"
-        ]
-
-        +
-
-        resumo_operacional[
-            "Segurança"
-        ]
-
-    )
-
-
-    horas_programadas = (
-        horas_operacao
-        + horas_parada
-    )
-
-
-    disponibilidade_fisica = (
-
-        (
-            horas_programadas
-            - horas_manut_corretiva
-        )
-
-        /
-
-        horas_programadas
-
-        * 100
-
-        if horas_programadas > 0
-
-        else 0.0
-
-    )
-
-
-    base_utilizacao = (
-        horas_programadas
-        - horas_manut_corretiva
-    )
-
-
-    utilizacao = (
-
-        horas_operacao
-        / base_utilizacao
-        * 100
-
-        if base_utilizacao > 0
-
-        else 0.0
-
-    )
-
-
-    rop = (
-
-        total_av
-        / horas_operacao
-
-        if horas_operacao > 0
-
-        else 0.0
-
-    )
-
-
-    st.subheader(
-        "⚙️ Indicadores Operacionais"
-    )
-
-
-    i1, i2, i3, i4, i5 = st.columns(5)
-
-
-    i1.metric(
-        "Horas Programadas",
-        f"{horas_programadas:.2f} h"
-    )
-
-
-    i2.metric(
-        "Horas de Operação",
-        f"{horas_operacao:.2f} h"
-    )
-
-
-    i3.metric(
-        "Horas de Parada",
-        f"{horas_parada:.2f} h"
-    )
-
-
-    i4.metric(
-        "Disponibilidade Física",
-        f"{disponibilidade_fisica:.2f} %"
-    )
-
-
-    i5.metric(
-        "Utilização",
-        f"{utilizacao:.2f} %"
-    )
-
-
-    st.metric(
-        "⚡ ROP",
-        f"{rop:.2f} m/h"
-    )
-
-
-    # ========================================================
-    # INSUMOS
-    # ========================================================
-
-    st.markdown("---")
-
-    st.subheader(
-        "⛽ Insumos Utilizados"
-    )
-
-
-    df_editado_insumos = st.data_editor(
-
-        df_insumos,
-
-        num_rows="dynamic",
-
-        use_container_width=True,
-
-        key=f"editor_ins_{furo_selecionado}",
-
-        column_config={
-
-            "id":
-                st.column_config.NumberColumn(
-                    "ID",
-                    disabled=True
-                ),
-
-            "furo":
-                st.column_config.TextColumn(
-                    "Furo",
-                    disabled=True
-                ),
-
-            "item":
-                st.column_config.TextColumn(
-                    "Descrição"
-                ),
-
-            "quantidade":
-                st.column_config.NumberColumn(
-                    "Quantidade",
-                    format="%.2f"
-                ),
-
-        }
-    )
-
-
-    # ========================================================
-    # BOTÕES
-    # ========================================================
-
-    st.markdown("---")
-
-
-    col_btn1, col_btn2 = st.columns(2)
-
-
-    # --------------------------------------------------------
-    # SALVAR
-    # --------------------------------------------------------
-
-    with col_btn1:
-
-        if st.button(
-            "💾 Salvar Todas as Alterações",
-            use_container_width=True
-        ):
-
-
-            conn = get_db()
-
-            c = conn.cursor()
-
-
-            # ------------------------------------------------
-            # AVANÇOS
-            # ------------------------------------------------
-
-            c.execute(
-                """
-                DELETE FROM avancos
-                WHERE furo = ?
-                """,
-                (furo_selecionado,)
-            )
-
-
-            acum_corr = 0.0
-
-
-            if not df_editado_avancos.empty:
-
-                for _, row in (
-                    df_editado_avancos.iterrows()
-                ):
-
-                    av_m = (
-                        float(
-                            row["ate_m"]
-                        )
-                        -
-                        float(
-                            row["de_m"]
-                        )
-                    )
-
-
-                    rec_m = float(
-                        row["recuperado_m"]
-                    )
-
-
-                    acum_corr += rec_m
-
-
-                    pct = (
-
-                        rec_m
-                        / av_m
-                        * 100
-
-                        if av_m > 0
-
-                        else 0.0
-
-                    )
-
-
-                    c.execute(
-                        """
-                        INSERT INTO avancos
-                        (
-                            furo,
-                            de_m,
-                            ate_m,
-                            avanco_m,
-                            recuperado_m,
-                            acumulado_m,
-                            porcentagem,
-                            material
-                        )
-                        VALUES
-                        (
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?
-                        )
-                        """,
-                        (
-                            furo_selecionado,
-                            row["de_m"],
-                            row["ate_m"],
-                            av_m,
-                            rec_m,
-                            acum_corr,
-                            pct,
-                            row.get(
-                                "material",
-                                ""
-                            ),
-                        )
-                    )
-
-
-            # ------------------------------------------------
-            # HORÁRIOS
-            # ------------------------------------------------
-
-            c.execute(
-                """
-                DELETE FROM horarios
-                WHERE furo = ?
-                """,
-                (furo_selecionado,)
-            )
-
-
-            if not df_editado_horarios.empty:
-
-                for _, row in (
-                    df_editado_horarios.iterrows()
-                ):
-
-
-                    codigo = str(
-                        row.get(
-                            "codigo",
-                            ""
-                        )
-                    ).strip()
-
-
-                    grupo = row.get(
-                        "grupo",
-                        ""
-                    )
-
-
-                    atividade = row.get(
-                        "atividade",
-                        ""
-                    )
-
-
-                    classificacao = row.get(
-                        "classificacao",
-                        ""
-                    )
-
-
-                    # Preenchimento automático
-                    # pelo código
-
-                    if codigo in ATIVIDADES_PADRAO:
-
-                        info = (
-                            ATIVIDADES_PADRAO[
-                                codigo
-                            ]
-                        )
-
-
-                        if not str(
-                            grupo
-                        ).strip():
-
-                            grupo = info["grupo"]
-
-
-                        if not str(
-                            atividade
-                        ).strip():
-
-                            atividade = info["atividade"]
-
-
-                        if not str(
-                            classificacao
-                        ).strip():
-
-                            classificacao = (
-                                info[
-                                    "classificacao"
-                                ]
-                            )
-
-
-                    tempo_calc = (
-                        calcular_diferenca_horas(
-                            row.get(
-                                "hora_inicio",
-                                ""
-                            ),
-
-                            row.get(
-                                "hora_fim",
-                                ""
-                            )
-                        )
-                    )
-
-
-                    c.execute(
-                        """
-                        INSERT INTO horarios
-                        (
-                            furo,
-                            descricao,
-                            hora_inicio,
-                            hora_fim,
-                            tempo_horas,
-                            horimetro,
-                            codigo,
-                            grupo,
-                            atividade,
-                            classificacao,
-                            observacao
-                        )
-                        VALUES
-                        (
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?,
-                            ?
-                        )
-                        """,
-                        (
-                            furo_selecionado,
-
-                            row.get(
-                                "descricao",
-                                ""
-                            ),
-
-                            row.get(
-                                "hora_inicio",
-                                ""
-                            ),
-
-                            row.get(
-                                "hora_fim",
-                                ""
-                            ),
-
-                            tempo_calc,
-
-                            row.get(
-                                "horimetro",
-                                ""
-                            ),
-
-                            codigo,
-
-                            grupo,
-
-                            atividade,
-
-                            classificacao,
-
-                            row.get(
-                                "observacao",
-                                ""
-                            ),
-
-                        )
-                    )
-
-
-            # ------------------------------------------------
-            # INSUMOS
-            # ------------------------------------------------
-
-            c.execute(
-                """
-                DELETE FROM insumos
-                WHERE furo = ?
-                """,
-                (furo_selecionado,)
-            )
-
-
-            if not df_editado_insumos.empty:
-
-                for _, row in (
-                    df_editado_insumos.iterrows()
-                ):
-
-                    c.execute(
-                        """
-                        INSERT INTO insumos
-                        (
-                            furo,
-                            item,
-                            quantidade
-                        )
-                        VALUES
-                        (
-                            ?,
-                            ?,
-                            ?
-                        )
-                        """,
-                        (
-                            furo_selecionado,
-                            row.get(
-                                "item",
-                                ""
-                            ),
-                            row.get(
-                                "quantidade",
-                                0
-                            ),
-                        )
-                    )
-
-
-            conn.commit()
-
-            conn.close()
-
-
-            st.success(
-                "✅ Dados salvos e atualizados com sucesso!"
-            )
-
-            st.rerun()
-
-
-    # --------------------------------------------------------
-    # EXCEL
-    # --------------------------------------------------------
-
-    with col_btn2:
-
-
-        excel_data = gerar_excel_boletim(
-
-            cabecalho,
-
-            df_editado_avancos,
-
-            df_editado_horarios,
-
-            df_editado_insumos,
-
-            resumo_operacional,
-
-        )
-
-
-        st.download_button(
-
-            label=(
-                "📥 Baixar Boletim em Excel Formatado"
-            ),
-
-            data=excel_data,
-
-            file_name=(
-                f"Boletim_Sondagem_"
-                f"{furo_selecionado}.xlsx"
-            ),
-
-            mime=(
-                "application/vnd.openxmlformats-"
-                "officedocument.spreadsheetml.sheet"
-            ),
-
-            use_container_width=True
-
-        )
-
-
+# ============================================================
+# COLABORADORES
+# ============================================================
+elif page == "👷 Colaboradores":
+    st.title("👷 COLABORADORES")
+    t1,t2 = st.tabs(["Lista","Novo cadastro"])
+    with t1:
+        df = query("SELECT * FROM colaboradores ORDER BY nome")
+        st.dataframe(df, use_container_width=True, hide_index=True)
+        if not df.empty:
+            idx = st.selectbox("Excluir colaborador", df["id"].tolist(), format_func=lambda x: f"{x} - {df[df.id==x].iloc[0].nome}")
+            if st.button("🗑️ Excluir colaborador"):
+                delete("colaboradores",idx); st.rerun()
+    with t2:
+        with st.form("form_colab", clear_on_submit=True):
+            nome = st.text_input("Nome")
+            funcao = st.selectbox("Função",["Supervisor","Sondador","Auxiliar de Sondador","Geólogo","Mecânico","Técnico de Segurança","Outro"])
+            matricula = st.text_input("Matrícula")
+            status = st.selectbox("Status",["Ativo","Inativo"])
+            if st.form_submit_button("Cadastrar",type="primary"):
+                if nome.strip():
+                    execute("INSERT INTO colaboradores(nome,funcao,matricula,status) VALUES(?,?,?,?)",(nome.strip(),funcao,matricula,status))
+                    st.success("Colaborador cadastrado."); st.rerun()
+
+# ============================================================
+# EQUIPES
+# ============================================================
+elif page == "👥 Equipes":
+    st.title("👥 EQUIPES")
+    dfc = query("SELECT * FROM colaboradores WHERE status='Ativo' ORDER BY nome")
+    if dfc.empty:
+        st.warning("Cadastre colaboradores primeiro.")
+    else:
+        opts = dfc["id"].tolist()
+        fmt = lambda x: dfc[dfc.id==x].iloc[0]["nome"]
+        with st.form("form_equipe", clear_on_submit=True):
+            c1,c2 = st.columns(2)
+            codigo = c1.text_input("Código da equipe")
+            nome = c2.text_input("Nome da equipe")
+            supervisor = st.selectbox("Supervisor",opts,format_func=fmt)
+            sondador = st.selectbox("Sondador",opts,format_func=fmt)
+            a1,a2 = st.columns(2)
+            aux1 = a1.selectbox("Auxiliar 1",opts,format_func=fmt)
+            aux2 = a2.selectbox("Auxiliar 2",opts,format_func=fmt)
+            status = st.selectbox("Status",["Ativa","Inativa"])
+            if st.form_submit_button("Cadastrar equipe",type="primary"):
+                if codigo and nome:
+                    try:
+                        execute("""INSERT INTO equipes(codigo,nome,supervisor_id,sondador_id,auxiliar1_id,auxiliar2_id,status)
+                        VALUES(?,?,?,?,?,?,?)""",(codigo,nome,supervisor,sondador,aux1,aux2,status))
+                        st.success("Equipe cadastrada."); st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Código de equipe já cadastrado.")
+        st.divider()
+        st.dataframe(query("SELECT * FROM equipes ORDER BY codigo"),use_container_width=True,hide_index=True)
+
+# ============================================================
+# SONDAS
+# ============================================================
+elif page == "🔩 Sondas":
+    st.title("🔩 SONDAS")
+    dfe = query("SELECT * FROM equipes WHERE status='Ativa' ORDER BY codigo")
+    if dfe.empty:
+        st.warning("Cadastre uma equipe antes de cadastrar uma sonda.")
+    else:
+        opts = dfe["id"].tolist()
+        fmt = lambda x: dfe[dfe.id==x].iloc[0]["codigo"]
+        with st.form("form_sonda",clear_on_submit=True):
+            c1,c2,c3 = st.columns(3)
+            codigo = c1.text_input("Código")
+            modelo = c2.text_input("Modelo")
+            fabricante = c3.text_input("Fabricante")
+            c1,c2,c3 = st.columns(3)
+            patrimonio = c1.text_input("Patrimônio")
+            equipe = c2.selectbox("Equipe vinculada",opts,format_func=fmt)
+            status = c3.selectbox("Status",["Operando","Parada","Manutenção","Inativa"])
+            if st.form_submit_button("Cadastrar sonda",type="primary"):
+                if codigo:
+                    try:
+                        execute("INSERT INTO sondas(codigo,modelo,fabricante,patrimonio,equipe_id,status) VALUES(?,?,?,?,?,?)",
+                                (codigo,modelo,fabricante,patrimonio,equipe,status))
+                        st.success("Sonda cadastrada."); st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Código de sonda já cadastrado.")
+        st.divider()
+        st.dataframe(query("SELECT * FROM sondas ORDER BY codigo"),use_container_width=True,hide_index=True)
+
+# ============================================================
+# CADASTROS
+# ============================================================
 else:
+    st.title("⚙️ CADASTROS")
+    tab_f, tab_a = st.tabs(["🎯 Furos","⏱️ Códigos de atividades"])
 
-    st.info(
-        "👈 Selecione ou crie um novo boletim "
-        "na barra lateral para iniciar a digitação."
-    )
+    with tab_f:
+        with st.form("form_furo",clear_on_submit=True):
+            c1,c2,c3 = st.columns(3)
+            ident = c1.text_input("Identificação do furo")
+            projeto = c2.text_input("Projeto")
+            cliente = c3.text_input("Cliente")
+            c1,c2,c3 = st.columns(3)
+            local = c1.text_input("Local")
+            e = c2.number_input("Coordenada E")
+            n = c3.number_input("Coordenada N")
+            c1,c2,c3 = st.columns(3)
+            cota = c1.number_input("Cota")
+            az = c2.number_input("Azimute")
+            dip = c3.number_input("DIP")
+            status = st.selectbox("Status",["Em andamento","Planejado","Concluído"])
+            if st.form_submit_button("Cadastrar furo",type="primary"):
+                if ident:
+                    try:
+                        execute("""INSERT INTO furos(identificacao,projeto,cliente,local,coord_e,coord_n,cota,azimute,dip,status)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)""",(ident,projeto,cliente,local,e,n,cota,az,dip,status))
+                        st.success("Furo cadastrado."); st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Identificação já cadastrada.")
+        st.dataframe(query("SELECT * FROM furos ORDER BY identificacao"),use_container_width=True,hide_index=True)
+
+    with tab_a:
+        st.caption("Edite ou cadastre os códigos para deixá-los exatamente iguais aos códigos da sua planilha.")
+        df = query("SELECT * FROM atividades ORDER BY codigo")
+        st.dataframe(df,use_container_width=True,hide_index=True)
+        with st.form("form_atividade",clear_on_submit=True):
+            c1,c2,c3,c4 = st.columns(4)
+            cod = c1.number_input("Código",min_value=1,step=1)
+            grupo = c2.text_input("Grupo")
+            atividade = c3.text_input("Atividade")
+            classificacao = c4.selectbox("Classificação",[
+                "OPERAÇÃO DIRETA","APOIO OPERACIONAL","MANUTENÇÃO PREVENTIVA",
+                "MECÂNICA CORRETIVA","PARADA EXTERNA","INTERVENÇÃO NO FURO",
+                "ADMINISTRATIVO","SEGURANÇA"
+            ])
+            if st.form_submit_button("Salvar código",type="primary"):
+                execute("""INSERT INTO atividades(codigo,grupo,atividade,classificacao)
+                VALUES(?,?,?,?)
+                ON CONFLICT(codigo) DO UPDATE SET grupo=excluded.grupo,
+                atividade=excluded.atividade,classificacao=excluded.classificacao""",
+                (int(cod),grupo,atividade,classificacao))
+                st.success("Código salvo."); st.rerun()
