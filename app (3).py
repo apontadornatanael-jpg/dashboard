@@ -2049,7 +2049,655 @@ if page == "🏠 Painel DDH":
 # ============================================================
 # NOVO BOLETIM
 # ============================================================
+# ========================================================
+# PRODUÇÃO POR SONDA
+# ========================================================
 
+st.divider()
+
+st.subheader(
+    "🔩 Produção por Sonda"
+)
+
+
+# --------------------------------------------------------
+# PRODUÇÃO EM METROS POR SONDA
+# --------------------------------------------------------
+
+producao_sondas = query(
+
+    """
+
+    SELECT
+
+        s.id AS sonda_id,
+
+        s.codigo AS sonda,
+
+        s.modelo AS modelo,
+
+        s.equipe_id,
+
+        e.codigo AS equipe,
+
+        e.nome AS nome_equipe,
+
+
+        COALESCE(
+
+            SUM(
+
+                COALESCE(
+                    m.ate_m,
+                    0
+                )
+
+                -
+
+                COALESCE(
+                    m.de_m,
+                    0
+                )
+
+            ),
+
+            0
+
+        ) AS metros,
+
+
+        COALESCE(
+
+            SUM(
+
+                COALESCE(
+                    m.recuperado_m,
+                    0
+                )
+
+            ),
+
+            0
+
+        ) AS recuperado
+
+
+    FROM sondas s
+
+
+    LEFT JOIN equipes e
+
+    ON e.id = s.equipe_id
+
+
+    LEFT JOIN boletins b
+
+    ON b.sonda_id = s.id
+
+
+    LEFT JOIN manobras m
+
+    ON m.boletim_id = b.id
+
+
+    WHERE s.status != 'Inativa'
+
+
+    GROUP BY
+
+        s.id,
+        s.codigo,
+        s.modelo,
+        s.equipe_id,
+        e.codigo,
+        e.nome
+
+
+    ORDER BY metros DESC
+
+    """
+
+)
+
+
+# --------------------------------------------------------
+# HORAS DE OPERAÇÃO POR SONDA
+# --------------------------------------------------------
+
+horas_sondas = query(
+
+    """
+
+    SELECT
+
+        s.id AS sonda_id,
+
+
+        COALESCE(
+
+            SUM(
+
+                CASE
+
+                    WHEN a.classificacao =
+                    'OPERAÇÃO DIRETA'
+
+                    THEN COALESCE(
+                        p.horas,
+                        0
+                    )
+
+                    ELSE 0
+
+                END
+
+            ),
+
+            0
+
+        ) AS horas_operacao
+
+
+    FROM sondas s
+
+
+    LEFT JOIN boletins b
+
+    ON b.sonda_id = s.id
+
+
+    LEFT JOIN apontamentos p
+
+    ON p.boletim_id = b.id
+
+
+    LEFT JOIN atividades a
+
+    ON a.codigo =
+    p.codigo_atividade
+
+
+    WHERE s.status != 'Inativa'
+
+
+    GROUP BY s.id
+
+    """
+
+)
+
+
+# --------------------------------------------------------
+# JUNTA PRODUÇÃO E HORAS
+# --------------------------------------------------------
+
+if not producao_sondas.empty:
+
+
+    producao_sondas_final = (
+
+        producao_sondas.merge(
+
+            horas_sondas,
+
+            on="sonda_id",
+
+            how="left"
+
+        )
+
+    )
+
+
+    producao_sondas_final[
+        "horas_operacao"
+    ] = (
+
+        producao_sondas_final[
+            "horas_operacao"
+        ].fillna(0)
+
+    )
+
+
+    # ----------------------------------------------------
+    # RECUPERAÇÃO %
+    # ----------------------------------------------------
+
+    producao_sondas_final[
+        "Recuperação %"
+    ] = (
+
+        producao_sondas_final[
+            "recuperado"
+        ]
+
+        /
+
+        producao_sondas_final[
+            "metros"
+        ].replace(
+            0,
+            pd.NA
+        )
+
+        *
+        100
+
+    ).fillna(0)
+
+
+    # ----------------------------------------------------
+    # ROP
+    # ----------------------------------------------------
+
+    producao_sondas_final[
+        "ROP (m/h)"
+    ] = (
+
+        producao_sondas_final[
+            "metros"
+        ]
+
+        /
+
+        producao_sondas_final[
+            "horas_operacao"
+        ].replace(
+            0,
+            pd.NA
+        )
+
+    ).fillna(0)
+
+
+    # ----------------------------------------------------
+    # TABELA BASE
+    # ----------------------------------------------------
+
+    tabela_sondas = (
+
+        producao_sondas_final[
+
+            [
+
+                "sonda",
+
+                "modelo",
+
+                "equipe",
+
+                "nome_equipe",
+
+                "metros",
+
+                "recuperado",
+
+                "Recuperação %",
+
+                "horas_operacao",
+
+                "ROP (m/h)"
+
+            ]
+
+        ].copy()
+
+    )
+
+
+    tabela_sondas.columns = [
+
+        "Sonda",
+
+        "Modelo",
+
+        "Equipe",
+
+        "Nome da Equipe",
+
+        "Metros",
+
+        "Recuperado",
+
+        "Recuperação %",
+
+        "Horas Operação",
+
+        "ROP (m/h)"
+
+    ]
+
+
+    tabela_sondas = (
+
+        tabela_sondas.sort_values(
+
+            "Metros",
+
+            ascending=False
+
+        )
+
+    )
+
+
+    # ====================================================
+    # CARDS DAS SONDAS
+    # ====================================================
+
+    sondas_com_producao = (
+
+        tabela_sondas[
+
+            tabela_sondas[
+                "Metros"
+            ] > 0
+
+        ]
+
+    )
+
+
+    if not sondas_com_producao.empty:
+
+
+        for _, sonda in sondas_com_producao.iterrows():
+
+
+            titulo_modelo = (
+
+                f" - {sonda['Modelo']}"
+
+                if pd.notna(
+                    sonda["Modelo"]
+                )
+
+                and str(
+                    sonda["Modelo"]
+                ).strip()
+
+                else ""
+
+            )
+
+
+            st.markdown(
+
+                f"### 🔩 {sonda['Sonda']}"
+                f"{titulo_modelo}"
+
+            )
+
+
+            if (
+
+                pd.notna(
+                    sonda["Equipe"]
+                )
+
+            ):
+
+
+                st.caption(
+
+                    f"👷 Equipe: "
+                    f"{sonda['Equipe']} - "
+                    f"{sonda['Nome da Equipe']}"
+
+                )
+
+
+            cc = st.columns(4)
+
+
+            cc[0].metric(
+
+                "PRODUÇÃO",
+
+                f"{sonda['Metros']:.2f} m"
+
+            )
+
+
+            cc[1].metric(
+
+                "RECUPERAÇÃO",
+
+                f"{sonda['Recuperação %']:.1f}%"
+
+            )
+
+
+            cc[2].metric(
+
+                "HORAS OPERAÇÃO",
+
+                f"{sonda['Horas Operação']:.2f} h"
+
+            )
+
+
+            cc[3].metric(
+
+                "ROP",
+
+                f"{sonda['ROP (m/h)']:.2f} m/h"
+
+            )
+
+
+            st.divider()
+
+
+    else:
+
+
+        st.info(
+
+            "Ainda não existem lançamentos "
+            "de produção para as sondas."
+
+        )
+
+
+    # ====================================================
+    # GRÁFICO PRODUÇÃO POR SONDA
+    # ====================================================
+
+    st.subheader(
+
+        "📊 Comparativo de Produção das Sondas"
+
+    )
+
+
+    grafico_sondas = (
+
+        tabela_sondas[
+
+            [
+
+                "Sonda",
+
+                "Metros"
+
+            ]
+
+        ]
+
+        .set_index(
+            "Sonda"
+        )
+
+    )
+
+
+    st.bar_chart(
+
+        grafico_sondas
+
+    )
+
+
+    # ====================================================
+    # GRÁFICO ROP POR SONDA
+    # ====================================================
+
+    st.subheader(
+
+        "⚡ ROP por Sonda"
+
+    )
+
+
+    grafico_rop_sondas = (
+
+        tabela_sondas[
+
+            [
+
+                "Sonda",
+
+                "ROP (m/h)"
+
+            ]
+
+        ]
+
+        .set_index(
+            "Sonda"
+        )
+
+    )
+
+
+    st.bar_chart(
+
+        grafico_rop_sondas
+
+    )
+
+
+    # ====================================================
+    # RANKING
+    # ====================================================
+
+    st.subheader(
+
+        "🏆 Ranking de Produção das Sondas"
+
+    )
+
+
+    ranking_sondas = (
+
+        tabela_sondas.copy()
+
+    )
+
+
+    ranking_sondas.insert(
+
+        0,
+
+        "Posição",
+
+        range(
+
+            1,
+
+            len(
+                ranking_sondas
+            ) + 1
+
+        )
+
+    )
+
+
+    # ====================================================
+    # ARREDONDAMENTO
+    # ====================================================
+
+    ranking_sondas[
+        "Metros"
+    ] = (
+
+        ranking_sondas[
+            "Metros"
+        ].round(2)
+
+    )
+
+
+    ranking_sondas[
+        "Recuperado"
+    ] = (
+
+        ranking_sondas[
+            "Recuperado"
+        ].round(2)
+
+    )
+
+
+    ranking_sondas[
+        "Recuperação %"
+    ] = (
+
+        ranking_sondas[
+            "Recuperação %"
+        ].round(1)
+
+    )
+
+
+    ranking_sondas[
+        "Horas Operação"
+    ] = (
+
+        ranking_sondas[
+            "Horas Operação"
+        ].round(2)
+
+    )
+
+
+    ranking_sondas[
+        "ROP (m/h)"
+    ] = (
+
+        ranking_sondas[
+            "ROP (m/h)"
+        ].round(2)
+
+    )
+
+
+    # ----------------------------------------------------
+    # EXIBE TABELA
+    # ----------------------------------------------------
+
+    st.dataframe(
+
+        ranking_sondas,
+
+        use_container_width=True,
+
+        hide_index=True
+
+    )
+
+
+else:
+
+
+    st.info(
+
+        "Ainda não existem sondas cadastradas."
+
+    )
 elif page == "📝 Novo Boletim":
 
     st.title(
