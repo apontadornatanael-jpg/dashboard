@@ -1,3 +1,4 @@
+%%writefile app.py
 import io
 import sqlite3
 from datetime import datetime
@@ -157,7 +158,6 @@ def gerar_excel_boletim(cabecalho, df_avancos, df_horarios, df_insumos):
     ws.title = "Boletim de Sondagem"
     ws.views.sheetView[0].showGridLines = True
 
-    # Estilos
     fill_header = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
     fill_sub = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="solid")
     font_header = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
@@ -170,14 +170,12 @@ def gerar_excel_boletim(cabecalho, df_avancos, df_horarios, df_insumos):
         bottom=Side(style='thin', color='D9D9D9')
     )
 
-    # Título Principal
     ws.merge_cells('A1:I1')
     ws['A1'] = f"BOLETIM DE SONDAGEM ROTATIVA - {cabecalho[0]}"
     ws['A1'].font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
     ws['A1'].fill = PatternFill(start_color="0F243E", end_color="0F243E", fill_type="solid")
     ws['A1'].alignment = Alignment(horizontal="center", vertical="center")
 
-    # Cabeçalho de Informações Gerais
     info_data = [
         ["Data:", cabecalho[1] or "", "Cliente:", cabecalho[5] or "", "Área:", cabecalho[6] or "", "Turno:", cabecalho[4] or ""],
         ["Modelo Sonda:", cabecalho[2] or "", "Nº Sonda:", cabecalho[3] or "", "Azimute:", cabecalho[7] or 0, "Ângulo:", cabecalho[8] or 0],
@@ -196,7 +194,6 @@ def gerar_excel_boletim(cabecalho, df_avancos, df_horarios, df_insumos):
 
     row_idx += 1
 
-    # Tabela de Avanços
     ws.cell(row=row_idx, column=1, value="PERFURAÇÃO E RECUPERAÇÃO").font = font_bold
     row_idx += 1
     
@@ -226,7 +223,6 @@ def gerar_excel_boletim(cabecalho, df_avancos, df_horarios, df_insumos):
 
     row_idx += 2
 
-    # Horários e Insumos lado a lado
     ws.cell(row=row_idx, column=1, value="DESCRIÇÃO DOS SERVIÇOS").font = font_bold
     ws.cell(row=row_idx, column=6, value="INSUMOS UTILIZADOS").font = font_bold
     row_idx += 1
@@ -260,7 +256,6 @@ def gerar_excel_boletim(cabecalho, df_avancos, df_horarios, df_insumos):
         ws.cell(row=start_i_row, column=7, value=r["quantidade"]).border = thin_border
         start_i_row += 1
 
-    # Autoajuste de colunas
     for col in ws.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = get_column_letter(col[0].column)
@@ -341,7 +336,6 @@ with st.sidebar:
         st.number_input("Recuperado (m)", min_value=0.0, step=0.1, key="sb_recuperado", on_change=on_change_rec)
         sb_mat = st.text_input("Material Perfurado", value="")
 
-        # Cálculos locais dinâmicos sem acionar exceção do Streamlit
         sb_avanco = max(0.0, round(st.session_state["sb_ate"] - st.session_state["sb_de"], 2))
         recuperado_val = round(st.session_state["sb_recuperado"], 2)
         rec_anterior = obter_total_recuperado_existente(furo_selecionado)
@@ -382,7 +376,6 @@ if furo_selecionado:
     
     st.title(f"📄 Boletim de Sondagem Rotativa: {furo_selecionado}")
     
-    # 1. CABEÇALHO TÉCNICO
     with st.expander("📌 Informações Gerais do Furo e Equipamento", expanded=True):
         col1, col2, col3, col4 = st.columns(4)
         data = col1.text_input("Data", value=cabecalho[1] or "")
@@ -417,7 +410,6 @@ if furo_selecionado:
             conn.close()
             st.success("Cabeçalho atualizado!")
 
-    # 2. TABELA DE AVANÇOS / MANOBRAS
     st.subheader("📊 Perfuração e Recuperação")
     
     if not df_avancos.empty:
@@ -454,7 +446,6 @@ if furo_selecionado:
     m2.metric("Recuperação Total do Furo", f"{total_rec:.2f} m")
     m3.metric("Recuperação Média", f"{rec_med:.2f} %")
 
-    # 3. HORÁRIOS E INSUMOS
     col_e1, col_e2 = st.columns([2, 1])
     
     with col_e1:
@@ -498,7 +489,6 @@ if furo_selecionado:
             }
         )
 
-    # BOTÕES DE AÇÃO (SALVAR E EXPORTAR EXCEL)
     col_btn1, col_btn2 = st.columns(2)
 
     with col_btn1:
@@ -508,7 +498,6 @@ if furo_selecionado:
             
             c.execute("DELETE FROM avancos WHERE furo = ?", (furo_selecionado,))
             
-            # Recalcular os acumulados em ordem cronológica antes de salvar
             acum_corr = 0.0
             for _, row in df_editado_avancos.iterrows():
                 av_m = row["ate_m"] - row["de_m"]
