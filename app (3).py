@@ -24,21 +24,37 @@ DB = "ddh.db"
 # ============================================================
 
 def conn():
-    return sqlite3.connect(DB, check_same_thread=False)
+    return sqlite3.connect(
+        DB,
+        check_same_thread=False
+    )
 
 
 def query(sql, params=()):
+
     c = conn()
-    df = pd.read_sql_query(sql, c, params=params)
+
+    df = pd.read_sql_query(
+        sql,
+        c,
+        params=params
+    )
+
     c.close()
+
     return df
 
 
 def execute(sql, params=()):
+
     c = conn()
+
     cur = c.cursor()
 
-    cur.execute(sql, params)
+    cur.execute(
+        sql,
+        params
+    )
 
     c.commit()
 
@@ -52,7 +68,9 @@ def execute(sql, params=()):
 def init_db():
 
     c = conn()
+
     cur = c.cursor()
+
 
     # --------------------------------------------------------
     # COLABORADORES
@@ -200,10 +218,12 @@ def init_db():
         )
     """)
 
+
     c.commit()
+
     c.close()
 
-    # Corrige e cria os códigos de atividades
+
     seed_activities()
 
 
@@ -215,206 +235,46 @@ def seed_activities():
 
     rows = [
 
-        (
-            1,
-            "Segurança e Gestão",
-            "DDS / Segurança",
-            "SEGURANÇA"
-        ),
-
-        (
-            2,
-            "Administrativo",
-            "Reunião / Administrativo",
-            "ADMINISTRATIVO"
-        ),
-
-        (
-            3,
-            "Logística",
-            "Deslocamento / Logística",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            4,
-            "Fluidos",
-            "Preparação de fluido",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            5,
-            "Praça e Acesso",
-            "Preparação de praça / acesso",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            6,
-            "Mobilização",
-            "Mobilização / desmobilização",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            7,
-            "Manutenção Preventiva",
-            "Manutenção preventiva",
-            "MANUTENÇÃO PREVENTIVA"
-        ),
-
-        (
-            8,
-            "Manutenção Corretiva",
-            "Manutenção mecânica corretiva",
-            "MECÂNICA CORRETIVA"
-        ),
-
-        (
-            9,
-            "Suprimentos",
-            "Aguardar / receber suprimentos",
-            "PARADA EXTERNA"
-        ),
-
-        (
-            10,
-            "Apoio Externo",
-            "Aguardar apoio externo",
-            "PARADA EXTERNA"
-        ),
-
-        (
-            11,
-            "Condições Externas",
-            "Chuva / condição climática",
-            "PARADA EXTERNA"
-        ),
-
-        (
-            12,
-            "Contratante",
-            "Aguardar liberação do contratante",
-            "PARADA EXTERNA"
-        ),
-
-        (
-            13,
-            "Serviços Especializados",
-            "Serviço especializado",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            14,
-            "Produção",
-            "Perfuração",
-            "OPERAÇÃO DIRETA"
-        ),
-
-        (
-            15,
-            "Produção",
-            "Manobra",
-            "OPERAÇÃO DIRETA"
-        ),
-
-        (
-            16,
-            "Produção",
-            "Troca de haste / tubo",
-            "OPERAÇÃO DIRETA"
-        ),
-
-        (
-            17,
-            "Produção",
-            "Condicionamento do furo",
-            "OPERAÇÃO DIRETA"
-        ),
-
-        (
-            18,
-            "Produção",
-            "Furando e manobrando",
-            "OPERAÇÃO DIRETA"
-        ),
-
-        (
-            19,
-            "Operação",
-            "Preparação operacional",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            20,
-            "Operação",
-            "Limpeza e organização",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            21,
-            "Ferramental",
-            "Troca de ferramental",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            22,
-            "Ferramental",
-            "Inspeção de ferramental",
-            "APOIO OPERACIONAL"
-        ),
-
-        (
-            23,
-            "Revestimento",
-            "Instalação / retirada de revestimento",
-            "INTERVENÇÃO NO FURO"
-        ),
-
-        (
-            24,
-            "Intervenção",
-            "Desvio / intervenção no furo",
-            "INTERVENÇÃO NO FURO"
-        ),
-
-        (
-            25,
-            "Intervenção",
-            "Obstrução / perda no furo",
-            "INTERVENÇÃO NO FURO"
-        ),
-
-        (
-            26,
-            "Segurança e Gestão",
-            "Treinamento / gestão",
-            "SEGURANÇA"
-        ),
-
-        (
-            27,
-            "Administrativo",
-            "Encerramento / relatório",
-            "ADMINISTRATIVO"
-        )
+        (1, "Segurança e Gestão", "DDS / Segurança", "SEGURANÇA"),
+        (2, "Administrativo", "Reunião / Administrativo", "ADMINISTRATIVO"),
+        (3, "Logística", "Deslocamento / Logística", "APOIO OPERACIONAL"),
+        (4, "Fluidos", "Preparação de fluido", "APOIO OPERACIONAL"),
+        (5, "Praça e Acesso", "Preparação de praça / acesso", "APOIO OPERACIONAL"),
+        (6, "Mobilização", "Mobilização / desmobilização", "APOIO OPERACIONAL"),
+        (7, "Manutenção Preventiva", "Manutenção preventiva", "MANUTENÇÃO PREVENTIVA"),
+        (8, "Manutenção Corretiva", "Manutenção mecânica corretiva", "MECÂNICA CORRETIVA"),
+        (9, "Suprimentos", "Aguardar / receber suprimentos", "PARADA EXTERNA"),
+        (10, "Apoio Externo", "Aguardar apoio externo", "PARADA EXTERNA"),
+        (11, "Condições Externas", "Chuva / condição climática", "PARADA EXTERNA"),
+        (12, "Contratante", "Aguardar liberação do contratante", "PARADA EXTERNA"),
+        (13, "Serviços Especializados", "Serviço especializado", "APOIO OPERACIONAL"),
+        (14, "Produção", "Perfuração", "OPERAÇÃO DIRETA"),
+        (15, "Produção", "Manobra", "OPERAÇÃO DIRETA"),
+        (16, "Produção", "Troca de haste / tubo", "OPERAÇÃO DIRETA"),
+        (17, "Produção", "Condicionamento do furo", "OPERAÇÃO DIRETA"),
+        (18, "Produção", "Furando e manobrando", "OPERAÇÃO DIRETA"),
+        (19, "Operação", "Preparação operacional", "APOIO OPERACIONAL"),
+        (20, "Operação", "Limpeza e organização", "APOIO OPERACIONAL"),
+        (21, "Ferramental", "Troca de ferramental", "APOIO OPERACIONAL"),
+        (22, "Ferramental", "Inspeção de ferramental", "APOIO OPERACIONAL"),
+        (23, "Revestimento", "Instalação / retirada de revestimento", "INTERVENÇÃO NO FURO"),
+        (24, "Intervenção", "Desvio / intervenção no furo", "INTERVENÇÃO NO FURO"),
+        (25, "Intervenção", "Obstrução / perda no furo", "INTERVENÇÃO NO FURO"),
+        (26, "Segurança e Gestão", "Treinamento / gestão", "SEGURANÇA"),
+        (27, "Administrativo", "Encerramento / relatório", "ADMINISTRATIVO")
 
     ]
 
 
     c = conn()
+
     cur = c.cursor()
 
 
     for codigo, grupo, atividade, classificacao in rows:
 
-        cur.execute("""
-
+        cur.execute(
+            """
             INSERT INTO atividades
             (
                 codigo,
@@ -430,55 +290,44 @@ def seed_activities():
             DO UPDATE SET
 
                 grupo = CASE
-
                     WHEN atividades.grupo IS NULL
                     OR TRIM(atividades.grupo) = ''
-
                     THEN excluded.grupo
-
                     ELSE atividades.grupo
-
                 END,
-
 
                 atividade = CASE
-
                     WHEN atividades.atividade IS NULL
                     OR TRIM(atividades.atividade) = ''
-
                     THEN excluded.atividade
-
                     ELSE atividades.atividade
-
                 END,
 
-
                 classificacao = CASE
-
                     WHEN atividades.classificacao IS NULL
                     OR TRIM(atividades.classificacao) = ''
-
                     THEN excluded.classificacao
-
                     ELSE atividades.classificacao
-
                 END
+            """,
 
-        """, (
+            (
+                codigo,
+                grupo,
+                atividade,
+                classificacao
+            )
 
-            codigo,
-            grupo,
-            atividade,
-            classificacao
-
-        ))
+        )
 
 
     c.commit()
+
     c.close()
 
 
 # Inicializa banco
+
 init_db()
 
 
@@ -491,19 +340,25 @@ def horas_intervalo(inicio, fim):
     if not inicio or not fim:
         return 0.0
 
+
     a = datetime.combine(
         date.today(),
         inicio
     )
+
 
     b = datetime.combine(
         date.today(),
         fim
     )
 
-    # Turno passando da meia noite
+
     if b < a:
-        b += timedelta(days=1)
+
+        b += timedelta(
+            days=1
+        )
+
 
     return round(
         (b - a).total_seconds() / 3600,
@@ -522,42 +377,62 @@ def activity_row(codigo):
         (int(codigo),)
     )
 
+
     if df.empty:
         return {}
+
 
     return df.iloc[0].to_dict()
 
 
-def entity_options(table, label_col, where=None):
+def entity_options(
+    table,
+    label_col,
+    where=None
+):
 
     sql = f"""
         SELECT *
         FROM {table}
     """
 
+
     if where:
+
         sql += " WHERE " + where
 
+
     df = query(sql)
+
 
     if df.empty:
         return df, {}
 
+
     mapping = {}
+
 
     for _, r in df.iterrows():
 
         mapping[
             int(r["id"])
-        ] = str(r[label_col])
+        ] = str(
+            r[label_col]
+        )
+
 
     return df, mapping
 
 
-def safe_name(df, col, idv):
+def safe_name(
+    df,
+    col,
+    idv
+):
 
     if pd.isna(idv):
         return ""
+
 
     try:
 
@@ -565,18 +440,25 @@ def safe_name(df, col, idv):
             df["id"] == int(idv)
         ]
 
+
         if row.empty:
             return ""
+
 
         return str(
             row.iloc[0][col]
         )
 
+
     except Exception:
+
         return ""
 
 
-def delete(table, idv):
+def delete(
+    table,
+    idv
+):
 
     execute(
         f"""
@@ -645,6 +527,7 @@ def excel_boletim(boletim_id):
         FROM apontamentos p
 
         LEFT JOIN atividades a
+
         ON p.codigo_atividade = a.codigo
 
         WHERE p.boletim_id=?
@@ -662,12 +545,14 @@ def excel_boletim(boletim_id):
         """
     )
 
+
     equipes = query(
         """
         SELECT *
         FROM equipes
         """
     )
+
 
     furos = query(
         """
@@ -684,19 +569,17 @@ def excel_boletim(boletim_id):
     ws.title = "BOLETIM_DDH"
 
 
-    # --------------------------------------------------------
-    # ESTILOS
-    # --------------------------------------------------------
-
     dark = PatternFill(
         "solid",
         fgColor="17365D"
     )
 
+
     light = PatternFill(
         "solid",
         fgColor="D9EAF7"
     )
+
 
     white = Font(
         color="FFFFFF",
@@ -704,9 +587,11 @@ def excel_boletim(boletim_id):
         size=14
     )
 
+
     bold = Font(
         bold=True
     )
+
 
     thin = Side(
         style="thin",
@@ -718,12 +603,16 @@ def excel_boletim(boletim_id):
     # TÍTULO
     # --------------------------------------------------------
 
-    ws.merge_cells("A1:J1")
+    ws.merge_cells(
+        "A1:J1"
+    )
+
 
     ws["A1"] = (
         "BOLETIM DE SONDAGEM "
         "ROTATIVA DIAMANTADA - DDH"
     )
+
 
     ws["A1"].fill = dark
 
@@ -744,11 +633,13 @@ def excel_boletim(boletim_id):
         b.get("sonda_id")
     )
 
+
     equipe = safe_name(
         equipes,
         "codigo",
         b.get("equipe_id")
     )
+
 
     furo = safe_name(
         furos,
@@ -760,17 +651,11 @@ def excel_boletim(boletim_id):
     info = [
 
         ("Data", b.get("data")),
-
         ("Turno", b.get("turno")),
-
         ("Projeto", b.get("projeto")),
-
         ("Cliente", b.get("cliente")),
-
         ("Sonda", sonda),
-
         ("Equipe", equipe),
-
         ("Furo", furo),
 
         (
@@ -797,11 +682,13 @@ def excel_boletim(boletim_id):
             label
         ).font = bold
 
+
         ws.cell(
             r,
             2,
             value
         )
+
 
         r += 1
 
@@ -853,13 +740,17 @@ def excel_boletim(boletim_id):
     ]
 
 
-    for c, h in enumerate(heads, 1):
+    for c, h in enumerate(
+        heads,
+        1
+    ):
 
         ws.cell(
             r,
             c,
             h
         ).fill = light
+
 
         ws.cell(
             r,
@@ -873,47 +764,52 @@ def excel_boletim(boletim_id):
 
 
         av = (
-            float(x["ate_m"] or 0)
+            float(
+                x["ate_m"] or 0
+            )
             -
-            float(x["de_m"] or 0)
+            float(
+                x["de_m"] or 0
+            )
         )
 
 
         rec = (
-            float(x["recuperado_m"] or 0)
+
+            float(
+                x["recuperado_m"] or 0
+            )
+
             /
+
             av
+
             *
             100
+
         ) if av else 0
 
 
         vals = [
 
             x["numero"],
-
             x["de_m"],
-
             x["ate_m"],
-
             av,
-
             x["recuperado_m"],
-
             rec,
-
             x["dip"],
-
             x["qaqc"],
-
             x["perfil"],
-
             x["fluido"]
 
         ]
 
 
-        for c, v in enumerate(vals, 1):
+        for c, v in enumerate(
+            vals,
+            1
+        ):
 
             ws.cell(
                 r,
@@ -968,7 +864,10 @@ def excel_boletim(boletim_id):
     ]
 
 
-    for c, h in enumerate(heads, 1):
+    for c, h in enumerate(
+        heads,
+        1
+    ):
 
         ws.cell(
             r,
@@ -991,27 +890,22 @@ def excel_boletim(boletim_id):
         vals = [
 
             x["codigo_atividade"],
-
             x["grupo"],
-
             x["atividade"],
-
             x["classificacao"],
-
             x["hora_inicio"],
-
             x["hora_fim"],
-
             x["horas"],
-
             x["horimetro"],
-
             x["observacao"]
 
         ]
 
 
-        for c, v in enumerate(vals, 1):
+        for c, v in enumerate(
+            vals,
+            1
+        ):
 
             ws.cell(
                 r,
@@ -1059,7 +953,10 @@ def excel_boletim(boletim_id):
     ]
 
 
-    for i, w in enumerate(widths, 1):
+    for i, w in enumerate(
+        widths,
+        1
+    ):
 
         ws.column_dimensions[
             get_column_letter(i)
@@ -1077,7 +974,9 @@ def excel_boletim(boletim_id):
 # SIDEBAR
 # ============================================================
 
-st.sidebar.title("⛏️ DDH CAMPO")
+st.sidebar.title(
+    "⛏️ DDH CAMPO"
+)
 
 
 page = st.sidebar.radio(
@@ -1099,491 +998,1054 @@ page = st.sidebar.radio(
 )
 
 
-# ========================================================
-# PRODUÇÃO POR EQUIPE
-# ========================================================
+# ============================================================
+# PAINEL DDH
+# ============================================================
 
-st.divider()
-
-st.subheader(
-    "👥 Produção por Equipe"
-)
+if page == "🏠 Painel DDH":
 
 
-# --------------------------------------------------------
-# PRODUÇÃO EM METROS POR EQUIPE
-# --------------------------------------------------------
-
-producao_metros = query(
-
-    """
-
-    SELECT
-
-        e.id AS equipe_id,
-
-        e.codigo AS equipe,
-
-        e.nome AS nome_equipe,
+    st.title(
+        "🏠 PAINEL DDH"
+    )
 
 
-        COALESCE(
+    # ========================================================
+    # PRODUÇÃO GERAL
+    # ========================================================
 
-            SUM(
+    resumo_geral = query(
+        """
+        SELECT
 
-                COALESCE(m.ate_m, 0)
+            COALESCE(
 
-                -
+                SUM(
 
-                COALESCE(m.de_m, 0)
-
-            ),
-
-            0
-
-        ) AS metros,
-
-
-        COALESCE(
-
-            SUM(
-                COALESCE(
-                    m.recuperado_m,
-                    0
-                )
-            ),
-
-            0
-
-        ) AS recuperado
-
-
-    FROM equipes e
-
-
-    LEFT JOIN boletins b
-
-    ON b.equipe_id = e.id
-
-
-    LEFT JOIN manobras m
-
-    ON m.boletim_id = b.id
-
-
-    WHERE e.status != 'Inativa'
-
-
-    GROUP BY
-
-        e.id,
-        e.codigo,
-        e.nome
-
-
-    ORDER BY metros DESC
-
-    """
-
-)
-
-
-# --------------------------------------------------------
-# HORAS DE OPERAÇÃO POR EQUIPE
-# --------------------------------------------------------
-
-producao_horas = query(
-
-    """
-
-    SELECT
-
-        e.id AS equipe_id,
-
-
-        COALESCE(
-
-            SUM(
-
-                CASE
-
-                    WHEN a.classificacao =
-                    'OPERAÇÃO DIRETA'
-
-                    THEN COALESCE(
-                        p.horas,
+                    COALESCE(
+                        ate_m,
                         0
                     )
 
-                    ELSE 0
+                    -
 
-                END
+                    COALESCE(
+                        de_m,
+                        0
+                    )
 
-            ),
+                ),
 
-            0
+                0
 
-        ) AS horas_operacao
-
-
-    FROM equipes e
-
-
-    LEFT JOIN boletins b
-
-    ON b.equipe_id = e.id
+            ) AS metros,
 
 
-    LEFT JOIN apontamentos p
+            COALESCE(
 
-    ON p.boletim_id = b.id
+                SUM(
 
+                    COALESCE(
+                        recuperado_m,
+                        0
+                    )
 
-    LEFT JOIN atividades a
+                ),
 
-    ON a.codigo =
-    p.codigo_atividade
+                0
 
-
-    WHERE e.status != 'Inativa'
-
-
-    GROUP BY e.id
-
-
-    """
-
-)
+            ) AS recuperado
 
 
-# --------------------------------------------------------
-# JUNTA PRODUÇÃO E HORAS
-# --------------------------------------------------------
-
-if not producao_metros.empty:
-
-
-    producao_equipes = (
-
-        producao_metros.merge(
-
-            producao_horas,
-
-            on="equipe_id",
-
-            how="left"
-
-        )
-
+        FROM manobras
+        """
     )
 
 
-    producao_equipes[
-        "horas_operacao"
-    ] = (
+    horas_geral = query(
+        """
+        SELECT
 
-        producao_equipes[
+            COALESCE(
+
+                SUM(
+
+                    CASE
+
+                        WHEN
+                        a.classificacao =
+                        'OPERAÇÃO DIRETA'
+
+                        THEN
+                        COALESCE(
+                            p.horas,
+                            0
+                        )
+
+                        ELSE 0
+
+                    END
+
+                ),
+
+                0
+
+            ) AS horas_operacao
+
+
+        FROM apontamentos p
+
+
+        LEFT JOIN atividades a
+
+        ON a.codigo =
+        p.codigo_atividade
+        """
+    )
+
+
+    metros_total = float(
+        resumo_geral.iloc[0]["metros"]
+        or 0
+    )
+
+
+    recuperado_total = float(
+        resumo_geral.iloc[0]["recuperado"]
+        or 0
+    )
+
+
+    horas_total = float(
+        horas_geral.iloc[0][
             "horas_operacao"
-        ].fillna(0)
-
+        ]
+        or 0
     )
 
 
-    # ----------------------------------------------------
-    # RECUPERAÇÃO
-    # ----------------------------------------------------
+    recuperacao_total = (
 
-    producao_equipes[
-        "Recuperação %"
-    ] = (
-
-        producao_equipes[
-            "recuperado"
-        ]
-
+        recuperado_total
         /
-
-        producao_equipes[
-            "metros"
-        ].replace(
-            0,
-            pd.NA
-        )
-
+        metros_total
         *
         100
 
-    ).fillna(0)
+    ) if metros_total > 0 else 0
 
 
-    # ----------------------------------------------------
-    # ROP
-    # ----------------------------------------------------
+    rop_total = (
 
-    producao_equipes[
-        "ROP (m/h)"
-    ] = (
-
-        producao_equipes[
-            "metros"
-        ]
-
+        metros_total
         /
+        horas_total
+
+    ) if horas_total > 0 else 0
+
+
+    boletins_total = query(
+        """
+        SELECT COUNT(*) AS total
+        FROM boletins
+        """
+    )
+
+
+    # ========================================================
+    # CARDS PRINCIPAIS
+    # ========================================================
+
+    c1, c2, c3, c4, c5 = st.columns(
+        5
+    )
+
+
+    c1.metric(
+        "⛏️ PRODUÇÃO TOTAL",
+        f"{metros_total:.2f} m"
+    )
+
+
+    c2.metric(
+        "🧪 RECUPERAÇÃO",
+        f"{recuperacao_total:.1f}%"
+    )
+
+
+    c3.metric(
+        "⏱️ HORAS OPERAÇÃO",
+        f"{horas_total:.2f} h"
+    )
+
+
+    c4.metric(
+        "⚡ ROP MÉDIO",
+        f"{rop_total:.2f} m/h"
+    )
+
+
+    c5.metric(
+        "📋 BOLETINS",
+        int(
+            boletins_total.iloc[0]["total"]
+        )
+    )
+
+
+    st.divider()
+
+
+    # ========================================================
+    # PRODUÇÃO POR EQUIPE
+    # ========================================================
+
+    st.subheader(
+        "👥 Produção por Equipe"
+    )
+
+
+    producao_metros = query(
+        """
+        SELECT
+
+            e.id AS equipe_id,
+
+            e.codigo AS equipe,
+
+            e.nome AS nome_equipe,
+
+
+            COALESCE(
+
+                SUM(
+
+                    COALESCE(
+                        m.ate_m,
+                        0
+                    )
+
+                    -
+
+                    COALESCE(
+                        m.de_m,
+                        0
+                    )
+
+                ),
+
+                0
+
+            ) AS metros,
+
+
+            COALESCE(
+
+                SUM(
+
+                    COALESCE(
+                        m.recuperado_m,
+                        0
+                    )
+
+                ),
+
+                0
+
+            ) AS recuperado
+
+
+        FROM equipes e
+
+
+        LEFT JOIN boletins b
+
+        ON b.equipe_id = e.id
+
+
+        LEFT JOIN manobras m
+
+        ON m.boletim_id = b.id
+
+
+        WHERE e.status != 'Inativa'
+
+
+        GROUP BY
+
+            e.id,
+            e.codigo,
+            e.nome
+
+
+        ORDER BY metros DESC
+        """
+    )
+
+
+    producao_horas = query(
+        """
+        SELECT
+
+            e.id AS equipe_id,
+
+
+            COALESCE(
+
+                SUM(
+
+                    CASE
+
+                        WHEN
+                        a.classificacao =
+                        'OPERAÇÃO DIRETA'
+
+                        THEN
+                        COALESCE(
+                            p.horas,
+                            0
+                        )
+
+                        ELSE 0
+
+                    END
+
+                ),
+
+                0
+
+            ) AS horas_operacao
+
+
+        FROM equipes e
+
+
+        LEFT JOIN boletins b
+
+        ON b.equipe_id = e.id
+
+
+        LEFT JOIN apontamentos p
+
+        ON p.boletim_id = b.id
+
+
+        LEFT JOIN atividades a
+
+        ON a.codigo =
+        p.codigo_atividade
+
+
+        WHERE e.status != 'Inativa'
+
+
+        GROUP BY e.id
+        """
+    )
+
+
+    if not producao_metros.empty:
+
+
+        producao_equipes = (
+
+            producao_metros.merge(
+
+                producao_horas,
+
+                on="equipe_id",
+
+                how="left"
+
+            )
+
+        )
+
 
         producao_equipes[
             "horas_operacao"
-        ].replace(
-            0,
-            pd.NA
+        ] = (
+
+            producao_equipes[
+                "horas_operacao"
+            ].fillna(0)
+
         )
 
-    ).fillna(0)
-
-
-    # ----------------------------------------------------
-    # TABELA
-    # ----------------------------------------------------
-
-    tabela_equipes = (
 
         producao_equipes[
+            "Recuperação %"
+        ] = (
 
-            [
-
-                "equipe",
-
-                "nome_equipe",
-
-                "metros",
-
-                "recuperado",
-
-                "Recuperação %",
-
-                "horas_operacao",
-
-                "ROP (m/h)"
-
+            producao_equipes[
+                "recuperado"
             ]
 
-        ].copy()
+            /
 
-    )
+            producao_equipes[
+                "metros"
+            ].replace(
+                0,
+                pd.NA
+            )
 
+            *
+            100
 
-    tabela_equipes.columns = [
-
-        "Equipe",
-
-        "Nome",
-
-        "Metros",
-
-        "Recuperado",
-
-        "Recuperação %",
-
-        "Horas Operação",
-
-        "ROP (m/h)"
-
-    ]
+        ).fillna(0)
 
 
-    tabela_equipes = (
+        producao_equipes[
+            "ROP (m/h)"
+        ] = (
 
-        tabela_equipes.sort_values(
+            producao_equipes[
+                "metros"
+            ]
 
-            "Metros",
+            /
 
-            ascending=False
+            producao_equipes[
+                "horas_operacao"
+            ].replace(
+                0,
+                pd.NA
+            )
+
+        ).fillna(0)
+
+
+        tabela_equipes = (
+
+            producao_equipes[
+
+                [
+
+                    "equipe",
+                    "nome_equipe",
+                    "metros",
+                    "recuperado",
+                    "Recuperação %",
+                    "horas_operacao",
+                    "ROP (m/h)"
+
+                ]
+
+            ].copy()
 
         )
 
-    )
+
+        tabela_equipes.columns = [
+
+            "Equipe",
+            "Nome",
+            "Metros",
+            "Recuperado",
+            "Recuperação %",
+            "Horas Operação",
+            "ROP (m/h)"
+
+        ]
 
 
-    # ====================================================
-    # CARDS DAS EQUIPES
-    # ====================================================
+        tabela_equipes = (
 
-    equipes_com_producao = (
+            tabela_equipes.sort_values(
 
-        tabela_equipes[
+                "Metros",
+
+                ascending=False
+
+            )
+
+        )
+
+
+        equipes_com_producao = (
 
             tabela_equipes[
-                "Metros"
-            ] > 0
 
-        ]
-
-    )
-
-
-    if not equipes_com_producao.empty:
-
-
-        for _, eq in equipes_com_producao.iterrows():
-
-
-            st.markdown(
-
-                f"### 👷 {eq['Equipe']} - {eq['Nome']}"
-
-            )
-
-
-            cc = st.columns(4)
-
-
-            cc[0].metric(
-
-                "PRODUÇÃO",
-
-                f"{eq['Metros']:.2f} m"
-
-            )
-
-
-            cc[1].metric(
-
-                "RECUPERAÇÃO",
-
-                f"{eq['Recuperação %']:.1f}%"
-
-            )
-
-
-            cc[2].metric(
-
-                "HORAS OPERAÇÃO",
-
-                f"{eq['Horas Operação']:.2f} h"
-
-            )
-
-
-            cc[3].metric(
-
-                "ROP",
-
-                f"{eq['ROP (m/h)']:.2f} m/h"
-
-            )
-
-
-    else:
-
-
-        st.info(
-
-            "Ainda não existem lançamentos "
-            "de produção para as equipes."
-
-        )
-
-
-    # ====================================================
-    # GRÁFICO
-    # ====================================================
-
-    st.subheader(
-        "📊 Comparativo de Produção das Equipes"
-    )
-
-
-    grafico_producao = (
-
-        tabela_equipes[
-
-            [
-
-                "Equipe",
-
-                "Metros"
+                tabela_equipes[
+                    "Metros"
+                ] > 0
 
             ]
 
-        ]
-
-        .set_index(
-            "Equipe"
         )
 
-    )
+
+        if not equipes_com_producao.empty:
 
 
-    st.bar_chart(
-        grafico_producao
-    )
+            for _, eq in (
+                equipes_com_producao.iterrows()
+            ):
 
 
-    # ====================================================
-    # TABELA COMPLETA
-    # ====================================================
+                st.markdown(
+
+                    f"### 👷 {eq['Equipe']} - {eq['Nome']}"
+
+                )
+
+
+                cc = st.columns(4)
+
+
+                cc[0].metric(
+
+                    "PRODUÇÃO",
+
+                    f"{eq['Metros']:.2f} m"
+
+                )
+
+
+                cc[1].metric(
+
+                    "RECUPERAÇÃO",
+
+                    f"{eq['Recuperação %']:.1f}%"
+
+                )
+
+
+                cc[2].metric(
+
+                    "HORAS OPERAÇÃO",
+
+                    f"{eq['Horas Operação']:.2f} h"
+
+                )
+
+
+                cc[3].metric(
+
+                    "ROP",
+
+                    f"{eq['ROP (m/h)']:.2f} m/h"
+
+                )
+
+
+        st.subheader(
+            "📊 Comparativo das Equipes"
+        )
+
+
+        grafico_equipes = (
+
+            tabela_equipes[
+
+                [
+
+                    "Equipe",
+                    "Metros"
+
+                ]
+
+            ]
+
+            .set_index(
+                "Equipe"
+            )
+
+        )
+
+
+        st.bar_chart(
+            grafico_equipes
+        )
+
+
+        st.subheader(
+            "📋 Resumo por Equipe"
+        )
+
+
+        tabela_exibicao = (
+            tabela_equipes.copy()
+        )
+
+
+        tabela_exibicao[
+            "Metros"
+        ] = tabela_exibicao[
+            "Metros"
+        ].round(2)
+
+
+        tabela_exibicao[
+            "Recuperado"
+        ] = tabela_exibicao[
+            "Recuperado"
+        ].round(2)
+
+
+        tabela_exibicao[
+            "Recuperação %"
+        ] = tabela_exibicao[
+            "Recuperação %"
+        ].round(1)
+
+
+        tabela_exibicao[
+            "Horas Operação"
+        ] = tabela_exibicao[
+            "Horas Operação"
+        ].round(2)
+
+
+        tabela_exibicao[
+            "ROP (m/h)"
+        ] = tabela_exibicao[
+            "ROP (m/h)"
+        ].round(2)
+
+
+        st.dataframe(
+
+            tabela_exibicao,
+
+            use_container_width=True,
+
+            hide_index=True
+
+        )
+
+
+    st.divider()
+
+
+    # ========================================================
+    # PRODUÇÃO POR SONDA
+    # ========================================================
 
     st.subheader(
-        "📋 Resumo Geral por Equipe"
+        "🔩 Produção por Sonda"
     )
 
 
-    tabela_exibicao = (
-        tabela_equipes.copy()
+    producao_sonda_metros = query(
+        """
+        SELECT
+
+            s.id AS sonda_id,
+
+            s.codigo AS sonda,
+
+            s.modelo,
+
+            s.status,
+
+
+            COALESCE(
+
+                SUM(
+
+                    COALESCE(
+                        m.ate_m,
+                        0
+                    )
+
+                    -
+
+                    COALESCE(
+                        m.de_m,
+                        0
+                    )
+
+                ),
+
+                0
+
+            ) AS metros,
+
+
+            COALESCE(
+
+                SUM(
+
+                    COALESCE(
+                        m.recuperado_m,
+                        0
+                    )
+
+                ),
+
+                0
+
+            ) AS recuperado
+
+
+        FROM sondas s
+
+
+        LEFT JOIN boletins b
+
+        ON b.sonda_id = s.id
+
+
+        LEFT JOIN manobras m
+
+        ON m.boletim_id = b.id
+
+
+        WHERE s.status != 'Inativa'
+
+
+        GROUP BY
+
+            s.id,
+            s.codigo,
+            s.modelo,
+            s.status
+
+
+        ORDER BY metros DESC
+        """
     )
 
 
-    tabela_exibicao[
-        "Metros"
-    ] = tabela_exibicao[
-        "Metros"
-    ].round(2)
+    producao_sonda_horas = query(
+        """
+        SELECT
+
+            s.id AS sonda_id,
 
 
-    tabela_exibicao[
-        "Recuperado"
-    ] = tabela_exibicao[
-        "Recuperado"
-    ].round(2)
+            COALESCE(
+
+                SUM(
+
+                    CASE
+
+                        WHEN
+                        a.classificacao =
+                        'OPERAÇÃO DIRETA'
+
+                        THEN
+                        COALESCE(
+                            p.horas,
+                            0
+                        )
+
+                        ELSE 0
+
+                    END
+
+                ),
+
+                0
+
+            ) AS horas_operacao
 
 
-    tabela_exibicao[
-        "Recuperação %"
-    ] = tabela_exibicao[
-        "Recuperação %"
-    ].round(1)
+        FROM sondas s
 
 
-    tabela_exibicao[
-        "Horas Operação"
-    ] = tabela_exibicao[
-        "Horas Operação"
-    ].round(2)
+        LEFT JOIN boletins b
+
+        ON b.sonda_id = s.id
 
 
-    tabela_exibicao[
-        "ROP (m/h)"
-    ] = tabela_exibicao[
-        "ROP (m/h)"
-    ].round(2)
+        LEFT JOIN apontamentos p
+
+        ON p.boletim_id = b.id
 
 
-    st.dataframe(
+        LEFT JOIN atividades a
 
-        tabela_exibicao,
+        ON a.codigo =
+        p.codigo_atividade
 
-        use_container_width=True,
 
-        hide_index=True
+        WHERE s.status != 'Inativa'
 
+
+        GROUP BY s.id
+        """
     )
 
 
-else:
+    if not producao_sonda_metros.empty:
 
 
-    st.info(
-        "Ainda não existem equipes cadastradas."
-    )
+        producao_sondas = (
+
+            producao_sonda_metros.merge(
+
+                producao_sonda_horas,
+
+                on="sonda_id",
+
+                how="left"
+
+            )
+
+        )
+
+
+        producao_sondas[
+            "horas_operacao"
+        ] = (
+
+            producao_sondas[
+                "horas_operacao"
+            ].fillna(0)
+
+        )
+
+
+        producao_sondas[
+            "Recuperação %"
+        ] = (
+
+            producao_sondas[
+                "recuperado"
+            ]
+
+            /
+
+            producao_sondas[
+                "metros"
+            ].replace(
+                0,
+                pd.NA
+            )
+
+            *
+            100
+
+        ).fillna(0)
+
+
+        producao_sondas[
+            "ROP (m/h)"
+        ] = (
+
+            producao_sondas[
+                "metros"
+            ]
+
+            /
+
+            producao_sondas[
+                "horas_operacao"
+            ].replace(
+                0,
+                pd.NA
+            )
+
+        ).fillna(0)
+
+
+        tabela_sondas = (
+
+            producao_sondas[
+
+                [
+
+                    "sonda",
+                    "modelo",
+                    "status",
+                    "metros",
+                    "recuperado",
+                    "Recuperação %",
+                    "horas_operacao",
+                    "ROP (m/h)"
+
+                ]
+
+            ].copy()
+
+        )
+
+
+        tabela_sondas.columns = [
+
+            "Sonda",
+            "Modelo",
+            "Status",
+            "Metros",
+            "Recuperado",
+            "Recuperação %",
+            "Horas Operação",
+            "ROP (m/h)"
+
+        ]
+
+
+        tabela_sondas = (
+
+            tabela_sondas.sort_values(
+
+                "Metros",
+
+                ascending=False
+
+            )
+
+        )
+
+
+        sondas_com_producao = (
+
+            tabela_sondas[
+
+                tabela_sondas[
+                    "Metros"
+                ] > 0
+
+            ]
+
+        )
+
+
+        if not sondas_com_producao.empty:
+
+
+            for _, sonda in (
+
+                sondas_com_producao.iterrows()
+
+            ):
+
+
+                st.markdown(
+
+                    f"### 🔩 {sonda['Sonda']}"
+
+                )
+
+
+                cs = st.columns(4)
+
+
+                cs[0].metric(
+
+                    "PRODUÇÃO",
+
+                    f"{sonda['Metros']:.2f} m"
+
+                )
+
+
+                cs[1].metric(
+
+                    "RECUPERAÇÃO",
+
+                    f"{sonda['Recuperação %']:.1f}%"
+
+                )
+
+
+                cs[2].metric(
+
+                    "HORAS OPERAÇÃO",
+
+                    f"{sonda['Horas Operação']:.2f} h"
+
+                )
+
+
+                cs[3].metric(
+
+                    "ROP",
+
+                    f"{sonda['ROP (m/h)']:.2f} m/h"
+
+                )
+
+
+        st.subheader(
+            "📊 Comparativo das Sondas"
+        )
+
+
+        grafico_sondas = (
+
+            tabela_sondas[
+
+                [
+
+                    "Sonda",
+                    "Metros"
+
+                ]
+
+            ]
+
+            .set_index(
+                "Sonda"
+            )
+
+        )
+
+
+        st.bar_chart(
+            grafico_sondas
+        )
+
+
+        st.subheader(
+            "📋 Resumo por Sonda"
+        )
+
+
+        tabela_sondas_exibicao = (
+            tabela_sondas.copy()
+        )
+
+
+        tabela_sondas_exibicao[
+            "Metros"
+        ] = tabela_sondas_exibicao[
+            "Metros"
+        ].round(2)
+
+
+        tabela_sondas_exibicao[
+            "Recuperado"
+        ] = tabela_sondas_exibicao[
+            "Recuperado"
+        ].round(2)
+
+
+        tabela_sondas_exibicao[
+            "Recuperação %"
+        ] = tabela_sondas_exibicao[
+            "Recuperação %"
+        ].round(1)
+
+
+        tabela_sondas_exibicao[
+            "Horas Operação"
+        ] = tabela_sondas_exibicao[
+            "Horas Operação"
+        ].round(2)
+
+
+        tabela_sondas_exibicao[
+            "ROP (m/h)"
+        ] = tabela_sondas_exibicao[
+            "ROP (m/h)"
+        ].round(2)
+
+
+        st.dataframe(
+
+            tabela_sondas_exibicao,
+
+            use_container_width=True,
+
+            hide_index=True
+
+        )
+
+
 # ============================================================
 # NOVO BOLETIM
 # ============================================================
@@ -1651,14 +2113,18 @@ elif page == "📝 Novo Boletim":
         st.session_state.boletim_edit_id = None
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # CABEÇALHO
-    # --------------------------------------------------------
+    # ========================================================
 
-    with st.form("cabecalho"):
+    with st.form(
+        "cabecalho"
+    ):
 
 
-        a, b, c, d = st.columns(4)
+        a, b, c, d = st.columns(
+            4
+        )
 
 
         data_b = a.date_input(
@@ -1709,11 +2175,17 @@ elif page == "📝 Novo Boletim":
 
 
         if (
+
             not row_s.empty
+
             and
+
             pd.notna(
-                row_s.iloc[0]["equipe_id"]
+                row_s.iloc[0][
+                    "equipe_id"
+                ]
             )
+
         ):
 
             equipe_padrao = int(
@@ -1756,7 +2228,9 @@ elif page == "📝 Novo Boletim":
         )
 
 
-        a, b, c, d = st.columns(4)
+        a, b, c, d = st.columns(
+            4
+        )
 
 
         furo_id = a.selectbox(
@@ -1823,9 +2297,13 @@ elif page == "📝 Novo Boletim":
 
 
         if (
+
             h_fim
+
             and
+
             h_fim < h_ini
+
         ):
 
             st.error(
@@ -1843,7 +2321,6 @@ elif page == "📝 Novo Boletim":
             bid = execute(
 
                 """
-
                 INSERT INTO boletins
                 (
                     data,
@@ -1873,7 +2350,6 @@ elif page == "📝 Novo Boletim":
                     ?,
                     ?
                 )
-
                 """,
 
                 (
@@ -1909,20 +2385,18 @@ elif page == "📝 Novo Boletim":
 
 
             st.success(
-
                 "Boletim criado. "
                 "Agora adicione manobras "
                 "e atividades abaixo."
-
             )
 
 
             st.rerun()
 
 
-    # --------------------------------------------------------
+    # ========================================================
     # LANÇAMENTOS
-    # --------------------------------------------------------
+    # ========================================================
 
     bid = st.session_state.boletim_edit_id
 
@@ -1951,7 +2425,9 @@ elif page == "📝 Novo Boletim":
         ):
 
 
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4 = st.columns(
+                4
+            )
 
 
             numero = c1.number_input(
@@ -2028,7 +2504,9 @@ elif page == "📝 Novo Boletim":
             )
 
 
-            c1, c2, c3, c4, c5 = st.columns(5)
+            c1, c2, c3, c4, c5 = st.columns(
+                5
+            )
 
 
             dip = c1.number_input(
@@ -2099,7 +2577,6 @@ elif page == "📝 Novo Boletim":
                 execute(
 
                     """
-
                     INSERT INTO manobras
                     (
                         boletim_id,
@@ -2129,7 +2606,6 @@ elif page == "📝 Novo Boletim":
                         ?,
                         ?
                     )
-
                     """,
 
                     (
@@ -2172,14 +2648,10 @@ elif page == "📝 Novo Boletim":
         dfm = query(
 
             """
-
             SELECT *
             FROM manobras
-
             WHERE boletim_id=?
-
             ORDER BY numero
-
             """,
 
             (bid,)
@@ -2249,12 +2721,9 @@ elif page == "📝 Novo Boletim":
         acts = query(
 
             """
-
             SELECT *
             FROM atividades
-
             ORDER BY codigo
-
             """
 
         )
@@ -2288,7 +2757,9 @@ elif page == "📝 Novo Boletim":
             )
 
 
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3 = st.columns(
+                3
+            )
 
 
             c1.text_input(
@@ -2333,7 +2804,9 @@ elif page == "📝 Novo Boletim":
             )
 
 
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4 = st.columns(
+                4
+            )
 
 
             inicio = c1.time_input(
@@ -2404,7 +2877,6 @@ elif page == "📝 Novo Boletim":
             execute(
 
                 """
-
                 INSERT INTO apontamentos
                 (
                     boletim_id,
@@ -2426,7 +2898,6 @@ elif page == "📝 Novo Boletim":
                     ?,
                     ?
                 )
-
                 """,
 
                 (
@@ -2462,14 +2933,9 @@ elif page == "📝 Novo Boletim":
             st.rerun()
 
 
-        # ----------------------------------------------------
-        # TABELA DE ATIVIDADES
-        # ----------------------------------------------------
-
         dfa = query(
 
             """
-
             SELECT
 
                 p.id,
@@ -2502,7 +2968,6 @@ elif page == "📝 Novo Boletim":
             WHERE p.boletim_id=?
 
             ORDER BY p.id
-
             """,
 
             (bid,)
@@ -2527,9 +2992,9 @@ elif page == "📝 Novo Boletim":
         st.divider()
 
 
-        # ----------------------------------------------------
+        # ====================================================
         # EXCEL
-        # ----------------------------------------------------
+        # ====================================================
 
         if st.button(
 
@@ -2572,14 +3037,12 @@ elif page == "📋 Boletins Salvos":
     df = query(
 
         """
-
         SELECT *
         FROM boletins
 
         ORDER BY
             data DESC,
             id DESC
-
         """
 
     )
@@ -2620,7 +3083,9 @@ elif page == "📋 Boletins Salvos":
         )
 
 
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3 = st.columns(
+            3
+        )
 
 
         if c1.button(
@@ -2630,6 +3095,7 @@ elif page == "📋 Boletins Salvos":
             st.session_state.boletim_edit_id = int(
                 bid
             )
+
 
             st.info(
 
@@ -2662,10 +3128,8 @@ elif page == "📋 Boletins Salvos":
             execute(
 
                 """
-
                 DELETE FROM manobras
                 WHERE boletim_id=?
-
                 """,
 
                 (int(bid),)
@@ -2676,10 +3140,8 @@ elif page == "📋 Boletins Salvos":
             execute(
 
                 """
-
                 DELETE FROM apontamentos
                 WHERE boletim_id=?
-
                 """,
 
                 (int(bid),)
@@ -2717,7 +3179,6 @@ elif page == "👷 Colaboradores":
         [
 
             "Lista",
-
             "Novo cadastro"
 
         ]
@@ -2731,12 +3192,9 @@ elif page == "👷 Colaboradores":
         df = query(
 
             """
-
             SELECT *
             FROM colaboradores
-
             ORDER BY nome
-
             """
 
         )
@@ -2780,6 +3238,7 @@ elif page == "👷 Colaboradores":
                     idx
                 )
 
+
                 st.rerun()
 
 
@@ -2807,17 +3266,11 @@ elif page == "👷 Colaboradores":
                 [
 
                     "Supervisor",
-
                     "Sondador",
-
                     "Auxiliar de Sondador",
-
                     "Geólogo",
-
                     "Mecânico",
-
                     "Técnico de Segurança",
-
                     "Outro"
 
                 ]
@@ -2837,7 +3290,6 @@ elif page == "👷 Colaboradores":
                 [
 
                     "Ativo",
-
                     "Inativo"
 
                 ]
@@ -2860,7 +3312,6 @@ elif page == "👷 Colaboradores":
                     execute(
 
                         """
-
                         INSERT INTO colaboradores
                         (
                             nome,
@@ -2876,7 +3327,6 @@ elif page == "👷 Colaboradores":
                             ?,
                             ?
                         )
-
                         """,
 
                         (
@@ -2916,14 +3366,12 @@ elif page == "👥 Equipes":
     dfc = query(
 
         """
-
         SELECT *
         FROM colaboradores
 
         WHERE status='Ativo'
 
         ORDER BY nome
-
         """
 
     )
@@ -2962,7 +3410,9 @@ elif page == "👥 Equipes":
         ):
 
 
-            c1, c2 = st.columns(2)
+            c1, c2 = st.columns(
+                2
+            )
 
 
             codigo = c1.text_input(
@@ -2997,7 +3447,9 @@ elif page == "👥 Equipes":
             )
 
 
-            a1, a2 = st.columns(2)
+            a1, a2 = st.columns(
+                2
+            )
 
 
             aux1 = a1.selectbox(
@@ -3029,7 +3481,6 @@ elif page == "👥 Equipes":
                 [
 
                     "Ativa",
-
                     "Inativa"
 
                 ]
@@ -3055,7 +3506,6 @@ elif page == "👥 Equipes":
                         execute(
 
                             """
-
                             INSERT INTO equipes
                             (
                                 codigo,
@@ -3077,7 +3527,6 @@ elif page == "👥 Equipes":
                                 ?,
                                 ?
                             )
-
                             """,
 
                             (
@@ -3126,12 +3575,9 @@ elif page == "👥 Equipes":
             query(
 
                 """
-
                 SELECT *
                 FROM equipes
-
                 ORDER BY codigo
-
                 """
 
             ),
@@ -3157,14 +3603,12 @@ elif page == "🔩 Sondas":
     dfe = query(
 
         """
-
         SELECT *
         FROM equipes
 
         WHERE status='Ativa'
 
         ORDER BY codigo
-
         """
 
     )
@@ -3207,7 +3651,9 @@ elif page == "🔩 Sondas":
         ):
 
 
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3 = st.columns(
+                3
+            )
 
 
             codigo = c1.text_input(
@@ -3225,7 +3671,9 @@ elif page == "🔩 Sondas":
             )
 
 
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3 = st.columns(
+                3
+            )
 
 
             patrimonio = c1.text_input(
@@ -3251,11 +3699,8 @@ elif page == "🔩 Sondas":
                 [
 
                     "Operando",
-
                     "Parada",
-
                     "Manutenção",
-
                     "Inativa"
 
                 ]
@@ -3281,7 +3726,6 @@ elif page == "🔩 Sondas":
                         execute(
 
                             """
-
                             INSERT INTO sondas
                             (
                                 codigo,
@@ -3301,7 +3745,6 @@ elif page == "🔩 Sondas":
                                 ?,
                                 ?
                             )
-
                             """,
 
                             (
@@ -3348,12 +3791,9 @@ elif page == "🔩 Sondas":
             query(
 
                 """
-
                 SELECT *
                 FROM sondas
-
                 ORDER BY codigo
-
                 """
 
             ),
@@ -3381,7 +3821,6 @@ else:
         [
 
             "🎯 Furos",
-
             "⏱️ Códigos de atividades"
 
         ]
@@ -3405,7 +3844,9 @@ else:
         ):
 
 
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3 = st.columns(
+                3
+            )
 
 
             ident = c1.text_input(
@@ -3423,7 +3864,9 @@ else:
             )
 
 
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3 = st.columns(
+                3
+            )
 
 
             local = c1.text_input(
@@ -3441,7 +3884,9 @@ else:
             )
 
 
-            c1, c2, c3 = st.columns(3)
+            c1, c2, c3 = st.columns(
+                3
+            )
 
 
             cota = c1.number_input(
@@ -3466,9 +3911,7 @@ else:
                 [
 
                     "Em andamento",
-
                     "Planejado",
-
                     "Concluído"
 
                 ]
@@ -3494,7 +3937,6 @@ else:
                         execute(
 
                             """
-
                             INSERT INTO furos
                             (
                                 identificacao,
@@ -3522,7 +3964,6 @@ else:
                                 ?,
                                 ?
                             )
-
                             """,
 
                             (
@@ -3574,12 +4015,9 @@ else:
             query(
 
                 """
-
                 SELECT *
                 FROM furos
-
                 ORDER BY identificacao
-
                 """
 
             ),
@@ -3610,12 +4048,9 @@ else:
         df = query(
 
             """
-
             SELECT *
             FROM atividades
-
             ORDER BY codigo
-
             """
 
         )
@@ -3641,7 +4076,9 @@ else:
         ):
 
 
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4 = st.columns(
+                4
+            )
 
 
             cod = c1.number_input(
@@ -3672,19 +4109,12 @@ else:
                 [
 
                     "OPERAÇÃO DIRETA",
-
                     "APOIO OPERACIONAL",
-
                     "MANUTENÇÃO PREVENTIVA",
-
                     "MECÂNICA CORRETIVA",
-
                     "PARADA EXTERNA",
-
                     "INTERVENÇÃO NO FURO",
-
                     "ADMINISTRATIVO",
-
                     "SEGURANÇA"
 
                 ]
@@ -3704,7 +4134,6 @@ else:
                 execute(
 
                     """
-
                     INSERT INTO atividades
                     (
                         codigo,
@@ -3733,7 +4162,6 @@ else:
 
                         classificacao =
                             excluded.classificacao
-
                     """,
 
                     (
