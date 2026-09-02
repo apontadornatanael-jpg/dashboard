@@ -1108,6 +1108,10 @@ if page == "🏠 Painel DDH":
     st.title("📊 PAINEL DDH")
 
 
+    # ========================================================
+    # DADOS GERAIS
+    # ========================================================
+
     boletins = query(
         """
         SELECT *
@@ -1138,17 +1142,24 @@ if page == "🏠 Painel DDH":
     )
 
 
+    # ========================================================
+    # PRODUÇÃO TOTAL
+    # ========================================================
+
     metros = 0.0
 
 
     if not man.empty:
 
         metros = float(
+
             (
                 man["ate_m"].fillna(0)
                 -
                 man["de_m"].fillna(0)
+
             ).sum()
+
         )
 
 
@@ -1158,20 +1169,28 @@ if page == "🏠 Painel DDH":
     if not man.empty:
 
         rec_total = float(
+
             man[
                 "recuperado_m"
             ].fillna(0).sum()
+
         )
 
 
     rec_pct = (
+
         rec_total
         /
         metros
         *
         100
+
     ) if metros else 0
 
+
+    # ========================================================
+    # HORAS DE OPERAÇÃO
+    # ========================================================
 
     horas_op = 0.0
 
@@ -1181,6 +1200,7 @@ if page == "🏠 Painel DDH":
         horas_op = float(
 
             ap.loc[
+
                 ap["classificacao"]
                 ==
                 "OPERAÇÃO DIRETA",
@@ -1192,6 +1212,10 @@ if page == "🏠 Painel DDH":
         )
 
 
+    # ========================================================
+    # MECÂNICA CORRETIVA
+    # ========================================================
+
     horas_mec = 0.0
 
 
@@ -1200,6 +1224,7 @@ if page == "🏠 Painel DDH":
         horas_mec = float(
 
             ap.loc[
+
                 ap["classificacao"]
                 ==
                 "MECÂNICA CORRETIVA",
@@ -1211,22 +1236,34 @@ if page == "🏠 Painel DDH":
         )
 
 
+    # ========================================================
+    # HORAS TOTAIS
+    # ========================================================
+
     horas_total = 0.0
 
 
     if not ap.empty:
 
         horas_total = float(
+
             ap["horas"].fillna(0).sum()
+
         )
 
+
+    # ========================================================
+    # DISPONIBILIDADE
+    # ========================================================
 
     disponibilidade = (
 
         (
+
             horas_total
             -
             horas_mec
+
         )
 
         /
@@ -1238,14 +1275,22 @@ if page == "🏠 Painel DDH":
     ) if horas_total else 0
 
 
+    # ========================================================
+    # UTILIZAÇÃO
+    # ========================================================
+
     utilizacao = (
 
         horas_op
+
         /
+
         (
+
             horas_total
             -
             horas_mec
+
         )
 
         *
@@ -1260,6 +1305,10 @@ if page == "🏠 Painel DDH":
     ) > 0 else 0
 
 
+    # ========================================================
+    # ROP TOTAL
+    # ========================================================
+
     rop = (
 
         metros
@@ -1269,26 +1318,46 @@ if page == "🏠 Painel DDH":
     ) if horas_op else 0
 
 
+    # ========================================================
+    # INDICADORES GERAIS
+    # ========================================================
+
     c = st.columns(4)
 
+
     c[0].metric(
+
         "METROS",
+
         f"{metros:.2f} m"
+
     )
+
 
     c[1].metric(
+
         "RECUPERAÇÃO",
+
         f"{rec_pct:.1f}%"
+
     )
+
 
     c[2].metric(
+
         "HORAS OPERAÇÃO",
+
         f"{horas_op:.2f} h"
+
     )
 
+
     c[3].metric(
+
         "ROP",
+
         f"{rop:.2f} m/h"
+
     )
 
 
@@ -1296,21 +1365,628 @@ if page == "🏠 Painel DDH":
 
 
     c[0].metric(
+
         "HORAS APONTADAS",
+
         f"{horas_total:.2f} h"
+
     )
 
 
     c[1].metric(
+
         "MECÂNICA CORRETIVA",
+
         f"{horas_mec:.2f} h"
+
     )
 
 
     c[2].metric(
+
         "DISPONIBILIDADE",
+
         f"{disponibilidade:.1f}%"
+
     )
+
+
+    # ========================================================
+    # PRODUÇÃO POR EQUIPE
+    # ========================================================
+
+    st.divider()
+
+
+    st.subheader(
+        "👥 Produção por Equipe"
+    )
+
+
+    producao_equipes = query(
+
+        """
+
+        SELECT
+
+            e.id AS equipe_id,
+
+            e.codigo AS equipe,
+
+            e.nome AS nome_equipe,
+
+
+            COALESCE(
+
+                SUM(
+
+                    COALESCE(
+                        m.ate_m,
+                        0
+                    )
+
+                    -
+
+                    COALESCE(
+                        m.de_m,
+                        0
+                    )
+
+                ),
+
+                0
+
+            ) AS metros,
+
+
+            COALESCE(
+
+                SUM(
+
+                    m.recuperado_m
+
+                ),
+
+                0
+
+            ) AS recuperado,
+
+
+            COALESCE(
+
+                SUM(
+
+                    CASE
+
+                        WHEN a.classificacao =
+                        'OPERAÇÃO DIRETA'
+
+                        THEN COALESCE(
+                            a.horas,
+                            0
+                        )
+
+                        ELSE 0
+
+                    END
+
+                ),
+
+                0
+
+            ) AS horas_operacao
+
+
+        FROM equipes e
+
+
+        LEFT JOIN boletins b
+
+        ON b.equipe_id = e.id
+
+
+        LEFT JOIN manobras m
+
+        ON m.boletim_id = b.id
+
+
+        LEFT JOIN apontamentos a
+
+        ON a.boletim_id = b.id
+
+
+        WHERE e.status != 'Inativa'
+
+
+        GROUP BY
+
+            e.id,
+            e.codigo,
+            e.nome
+
+
+        ORDER BY metros DESC
+
+        """
+
+    )
+
+
+    # --------------------------------------------------------
+    # CORREÇÃO PARA NÃO DUPLICAR METROS
+    # --------------------------------------------------------
+
+    producao_metros = query(
+
+        """
+
+        SELECT
+
+            e.id AS equipe_id,
+
+            e.codigo AS equipe,
+
+            e.nome AS nome_equipe,
+
+
+            COALESCE(
+
+                SUM(
+
+                    COALESCE(
+                        m.ate_m,
+                        0
+                    )
+
+                    -
+
+                    COALESCE(
+                        m.de_m,
+                        0
+                    )
+
+                ),
+
+                0
+
+            ) AS metros,
+
+
+            COALESCE(
+
+                SUM(
+                    m.recuperado_m
+                ),
+
+                0
+
+            ) AS recuperado
+
+
+        FROM equipes e
+
+
+        LEFT JOIN boletins b
+
+        ON b.equipe_id = e.id
+
+
+        LEFT JOIN manobras m
+
+        ON m.boletim_id = b.id
+
+
+        WHERE e.status != 'Inativa'
+
+
+        GROUP BY
+
+            e.id,
+            e.codigo,
+            e.nome
+
+
+        """
+
+    )
+
+
+    # --------------------------------------------------------
+    # HORAS POR EQUIPE
+    # --------------------------------------------------------
+
+    producao_horas = query(
+
+        """
+
+        SELECT
+
+            e.id AS equipe_id,
+
+
+            COALESCE(
+
+                SUM(
+
+                    CASE
+
+                        WHEN a.classificacao =
+                        'OPERAÇÃO DIRETA'
+
+                        THEN COALESCE(
+                            p.horas,
+                            0
+                        )
+
+                        ELSE 0
+
+                    END
+
+                ),
+
+                0
+
+            ) AS horas_operacao
+
+
+        FROM equipes e
+
+
+        LEFT JOIN boletins b
+
+        ON b.equipe_id = e.id
+
+
+        LEFT JOIN apontamentos p
+
+        ON p.boletim_id = b.id
+
+
+        LEFT JOIN atividades a
+
+        ON a.codigo =
+        p.codigo_atividade
+
+
+        WHERE e.status != 'Inativa'
+
+
+        GROUP BY e.id
+
+        """
+
+    )
+
+
+    # --------------------------------------------------------
+    # JUNTA PRODUÇÃO E HORAS
+    # --------------------------------------------------------
+
+    if not producao_metros.empty:
+
+
+        producao_equipes = (
+
+            producao_metros.merge(
+
+                producao_horas,
+
+                on="equipe_id",
+
+                how="left"
+
+            )
+
+        )
+
+
+        producao_equipes[
+            "horas_operacao"
+        ] = (
+
+            producao_equipes[
+                "horas_operacao"
+            ].fillna(0)
+
+        )
+
+
+        # ----------------------------------------------------
+        # RECUPERAÇÃO
+        # ----------------------------------------------------
+
+        producao_equipes[
+            "Recuperação %"
+        ] = (
+
+            producao_equipes[
+                "recuperado"
+            ]
+
+            /
+
+            producao_equipes[
+                "metros"
+            ].replace(
+                0,
+                pd.NA
+            )
+
+            *
+            100
+
+        ).fillna(0)
+
+
+        # ----------------------------------------------------
+        # ROP
+        # ----------------------------------------------------
+
+        producao_equipes[
+            "ROP (m/h)"
+        ] = (
+
+            producao_equipes[
+                "metros"
+            ]
+
+            /
+
+            producao_equipes[
+                "horas_operacao"
+            ].replace(
+                0,
+                pd.NA
+            )
+
+        ).fillna(0)
+
+
+        # ----------------------------------------------------
+        # RENOMEIA COLUNAS
+        # ----------------------------------------------------
+
+        tabela_equipes = (
+
+            producao_equipes[
+
+                [
+
+                    "equipe",
+
+                    "nome_equipe",
+
+                    "metros",
+
+                    "recuperado",
+
+                    "Recuperação %",
+
+                    "horas_operacao",
+
+                    "ROP (m/h)"
+
+                ]
+
+            ].copy()
+
+        )
+
+
+        tabela_equipes.columns = [
+
+            "Equipe",
+
+            "Nome",
+
+            "Metros",
+
+            "Recuperado",
+
+            "Recuperação %",
+
+            "Horas Operação",
+
+            "ROP (m/h)"
+
+        ]
+
+
+        tabela_equipes = (
+
+            tabela_equipes.sort_values(
+
+                "Metros",
+
+                ascending=False
+
+            )
+
+        )
+
+
+        # ====================================================
+        # CARDS DAS EQUIPES
+        # ====================================================
+
+        equipes_com_producao = (
+
+            tabela_equipes[
+                tabela_equipes[
+                    "Metros"
+                ] > 0
+            ]
+
+        )
+
+
+        if not equipes_com_producao.empty:
+
+
+            for _, eq in equipes_com_producao.iterrows():
+
+
+                st.markdown(
+
+                    f"### 👷 {eq['Equipe']} - {eq['Nome']}"
+
+                )
+
+
+                cc = st.columns(4)
+
+
+                cc[0].metric(
+
+                    "PRODUÇÃO",
+
+                    f"{eq['Metros']:.2f} m"
+
+                )
+
+
+                cc[1].metric(
+
+                    "RECUPERAÇÃO",
+
+                    f"{eq['Recuperação %']:.1f}%"
+
+                )
+
+
+                cc[2].metric(
+
+                    "HORAS OPERAÇÃO",
+
+                    f"{eq['Horas Operação']:.2f} h"
+
+                )
+
+
+                cc[3].metric(
+
+                    "ROP",
+
+                    f"{eq['ROP (m/h)']:.2f} m/h"
+
+                )
+
+
+        # ====================================================
+        # GRÁFICO
+        # ====================================================
+
+        st.subheader(
+            "📊 Comparativo de Produção das Equipes"
+        )
+
+
+        grafico_producao = (
+
+            tabela_equipes[
+
+                [
+
+                    "Equipe",
+
+                    "Metros"
+
+                ]
+
+            ]
+
+            .set_index(
+                "Equipe"
+            )
+
+        )
+
+
+        st.bar_chart(
+
+            grafico_producao
+
+        )
+
+
+        # ====================================================
+        # TABELA COMPLETA
+        # ====================================================
+
+        st.subheader(
+            "📋 Resumo Geral por Equipe"
+        )
+
+
+        tabela_exibicao = (
+
+            tabela_equipes.copy()
+
+        )
+
+
+        tabela_exibicao[
+            "Metros"
+        ] = tabela_exibicao[
+            "Metros"
+        ].round(2)
+
+
+        tabela_exibicao[
+            "Recuperado"
+        ] = tabela_exibicao[
+            "Recuperado"
+        ].round(2)
+
+
+        tabela_exibicao[
+            "Recuperação %"
+        ] = tabela_exibicao[
+            "Recuperação %"
+        ].round(1)
+
+
+        tabela_exibicao[
+            "Horas Operação"
+        ] = tabela_exibicao[
+            "Horas Operação"
+        ].round(2)
+
+
+        tabela_exibicao[
+            "ROP (m/h)"
+        ] = tabela_exibicao[
+            "ROP (m/h)"
+        ].round(2)
+
+
+        st.dataframe(
+
+            tabela_exibicao,
+
+            use_container_width=True,
+
+            hide_index=True
+
+        )
+
+
+    else:
+
+
+        st.info(
+
+            "Ainda não existem equipes "
+            "cadastradas."
+
+        )
+
+
+    # ========================================================
+    # RESUMO POR CLASSIFICAÇÃO
+    # ========================================================
+
+    st.divider()
 
 
     st.subheader(
@@ -1320,11 +1996,13 @@ if page == "🏠 Painel DDH":
 
     if not ap.empty:
 
+
         resumo = (
 
             ap.groupby(
 
                 "classificacao",
+
                 dropna=False
 
             )["horas"]
@@ -1337,18 +2015,22 @@ if page == "🏠 Painel DDH":
 
 
         st.bar_chart(
+
             resumo.set_index(
                 "classificacao"
             )
+
         )
 
 
     else:
 
-        st.info(
-            "Ainda não existem apontamentos."
-        )
 
+        st.info(
+
+            "Ainda não existem apontamentos."
+
+        )
 
 # ============================================================
 # NOVO BOLETIM
