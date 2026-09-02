@@ -24,19 +24,12 @@ DB = "ddh.db"
 # ============================================================
 
 def conn():
-    return sqlite3.connect(
-        DB,
-        check_same_thread=False
-    )
+    return sqlite3.connect(DB, check_same_thread=False)
 
 
 def query(sql, params=()):
     c = conn()
-    df = pd.read_sql_query(
-        sql,
-        c,
-        params=params
-    )
+    df = pd.read_sql_query(sql, c, params=params)
     c.close()
     return df
 
@@ -45,10 +38,7 @@ def execute(sql, params=()):
     c = conn()
     cur = c.cursor()
 
-    cur.execute(
-        sql,
-        params
-    )
+    cur.execute(sql, params)
 
     c.commit()
 
@@ -58,17 +48,6 @@ def execute(sql, params=()):
 
     return last
 
-
-def delete(table, idv):
-    execute(
-        f"DELETE FROM {table} WHERE id=?",
-        (int(idv),)
-    )
-
-
-# ============================================================
-# CRIAÇÃO DAS TABELAS
-# ============================================================
 
 def init_db():
 
@@ -89,6 +68,7 @@ def init_db():
         )
     """)
 
+
     # --------------------------------------------------------
     # EQUIPES
     # --------------------------------------------------------
@@ -106,6 +86,7 @@ def init_db():
         )
     """)
 
+
     # --------------------------------------------------------
     # SONDAS
     # --------------------------------------------------------
@@ -121,6 +102,7 @@ def init_db():
             status TEXT DEFAULT 'Operando'
         )
     """)
+
 
     # --------------------------------------------------------
     # FUROS
@@ -142,6 +124,7 @@ def init_db():
         )
     """)
 
+
     # --------------------------------------------------------
     # ATIVIDADES
     # --------------------------------------------------------
@@ -154,6 +137,7 @@ def init_db():
             classificacao TEXT NOT NULL
         )
     """)
+
 
     # --------------------------------------------------------
     # BOLETINS
@@ -176,6 +160,7 @@ def init_db():
         )
     """)
 
+
     # --------------------------------------------------------
     # MANOBRAS
     # --------------------------------------------------------
@@ -197,8 +182,9 @@ def init_db():
         )
     """)
 
+
     # --------------------------------------------------------
-    # APONTAMENTOS / TEMPOS E PARADAS
+    # APONTAMENTOS
     # --------------------------------------------------------
 
     cur.execute("""
@@ -217,21 +203,15 @@ def init_db():
     c.commit()
     c.close()
 
+    # Corrige e cria os códigos de atividades
     seed_activities()
 
 
 # ============================================================
-# CÓDIGOS INICIAIS DE ATIVIDADES
+# CÓDIGOS DE ATIVIDADES
 # ============================================================
 
 def seed_activities():
-
-    df = query(
-        "SELECT COUNT(*) qtd FROM atividades"
-    )
-
-    if int(df.iloc[0]["qtd"]) > 0:
-        return
 
     rows = [
 
@@ -422,28 +402,88 @@ def seed_activities():
             "Administrativo",
             "Encerramento / relatório",
             "ADMINISTRATIVO"
-        ),
+        )
+
     ]
 
-    c = conn()
 
-    c.executemany(
-        """
-        INSERT INTO atividades
-        VALUES (?,?,?,?)
-        """,
-        rows
-    )
+    c = conn()
+    cur = c.cursor()
+
+
+    for codigo, grupo, atividade, classificacao in rows:
+
+        cur.execute("""
+
+            INSERT INTO atividades
+            (
+                codigo,
+                grupo,
+                atividade,
+                classificacao
+            )
+
+            VALUES (?, ?, ?, ?)
+
+            ON CONFLICT(codigo)
+
+            DO UPDATE SET
+
+                grupo = CASE
+
+                    WHEN atividades.grupo IS NULL
+                    OR TRIM(atividades.grupo) = ''
+
+                    THEN excluded.grupo
+
+                    ELSE atividades.grupo
+
+                END,
+
+
+                atividade = CASE
+
+                    WHEN atividades.atividade IS NULL
+                    OR TRIM(atividades.atividade) = ''
+
+                    THEN excluded.atividade
+
+                    ELSE atividades.atividade
+
+                END,
+
+
+                classificacao = CASE
+
+                    WHEN atividades.classificacao IS NULL
+                    OR TRIM(atividades.classificacao) = ''
+
+                    THEN excluded.classificacao
+
+                    ELSE atividades.classificacao
+
+                END
+
+        """, (
+
+            codigo,
+            grupo,
+            atividade,
+            classificacao
+
+        ))
+
 
     c.commit()
     c.close()
 
 
+# Inicializa banco
 init_db()
 
 
 # ============================================================
-# FUNÇÕES GERAIS
+# FUNÇÕES AUXILIARES
 # ============================================================
 
 def horas_intervalo(inicio, fim):
@@ -461,8 +501,7 @@ def horas_intervalo(inicio, fim):
         fim
     )
 
-    # Permite atividades que passam da meia-noite
-
+    # Turno passando da meia noite
     if b < a:
         b += timedelta(days=1)
 
@@ -489,13 +528,12 @@ def activity_row(codigo):
     return df.iloc[0].to_dict()
 
 
-def entity_options(
-    table,
-    label_col,
-    where=None
-):
+def entity_options(table, label_col, where=None):
 
-    sql = f"SELECT * FROM {table}"
+    sql = f"""
+        SELECT *
+        FROM {table}
+    """
 
     if where:
         sql += " WHERE " + where
@@ -505,19 +543,18 @@ def entity_options(
     if df.empty:
         return df, {}
 
-    mapping = {
-        int(r["id"]): str(r[label_col])
-        for _, r in df.iterrows()
-    }
+    mapping = {}
+
+    for _, r in df.iterrows():
+
+        mapping[
+            int(r["id"])
+        ] = str(r[label_col])
 
     return df, mapping
 
 
-def safe_name(
-    df,
-    col,
-    idv
-):
+def safe_name(df, col, idv):
 
     if pd.isna(idv):
         return ""
@@ -539,302 +576,19 @@ def safe_name(
         return ""
 
 
-# ============================================================
-# RESUMO OPERACIONAL DO BOLETIM
-# ============================================================
+def delete(table, idv):
 
-def resumo_operacional_boletim(boletim_id):
-
-    # --------------------------------------------------------
-    # MANOBRAS
-    # --------------------------------------------------------
-
-    man = query(
-        """
-        SELECT *
-        FROM manobras
-        WHERE boletim_id=?
+    execute(
+        f"""
+        DELETE FROM {table}
+        WHERE id=?
         """,
-        (boletim_id,)
+        (int(idv),)
     )
-
-    metros_furados = 0.0
-    recuperacao_m = 0.0
-
-    if not man.empty:
-
-        man["de_m"] = pd.to_numeric(
-            man["de_m"],
-            errors="coerce"
-        ).fillna(0)
-
-        man["ate_m"] = pd.to_numeric(
-            man["ate_m"],
-            errors="coerce"
-        ).fillna(0)
-
-        man["recuperado_m"] = pd.to_numeric(
-            man["recuperado_m"],
-            errors="coerce"
-        ).fillna(0)
-
-        man["avanco"] = (
-            man["ate_m"]
-            - man["de_m"]
-        )
-
-        metros_furados = float(
-            man["avanco"]
-            .clip(lower=0)
-            .sum()
-        )
-
-        recuperacao_m = float(
-            man["recuperado_m"]
-            .sum()
-        )
-
-    recuperacao_pct = (
-        recuperacao_m
-        / metros_furados
-        * 100
-        if metros_furados > 0
-        else 0
-    )
-
-    # --------------------------------------------------------
-    # APONTAMENTOS
-    # --------------------------------------------------------
-
-    ap = query(
-        """
-        SELECT
-            p.*,
-            a.grupo,
-            a.atividade,
-            a.classificacao
-
-        FROM apontamentos p
-
-        LEFT JOIN atividades a
-            ON p.codigo_atividade=a.codigo
-
-        WHERE p.boletim_id=?
-        """,
-        (boletim_id,)
-    )
-
-    classificacoes = [
-
-        "OPERAÇÃO DIRETA",
-
-        "APOIO OPERACIONAL",
-
-        "MANUTENÇÃO PREVENTIVA",
-
-        "MECÂNICA CORRETIVA",
-
-        "PARADA EXTERNA",
-
-        "ADMINISTRATIVO",
-
-        "SEGURANÇA",
-
-        "INTERVENÇÃO NO FURO"
-
-    ]
-
-    totais = {
-        classificacao: 0.0
-        for classificacao
-        in classificacoes
-    }
-
-    horas_programadas = 0.0
-
-    if not ap.empty:
-
-        ap["horas"] = pd.to_numeric(
-            ap["horas"],
-            errors="coerce"
-        ).fillna(0)
-
-        horas_programadas = float(
-            ap["horas"].sum()
-        )
-
-        for classificacao in classificacoes:
-
-            valor = ap.loc[
-                ap["classificacao"]
-                == classificacao,
-                "horas"
-            ].sum()
-
-            totais[classificacao] = float(
-                valor
-            )
-
-    # --------------------------------------------------------
-    # HORAS POR CLASSIFICAÇÃO
-    # --------------------------------------------------------
-
-    h_direta = (
-        totais["OPERAÇÃO DIRETA"]
-    )
-
-    h_apoio = (
-        totais["APOIO OPERACIONAL"]
-        +
-        totais["INTERVENÇÃO NO FURO"]
-    )
-
-    h_prev = (
-        totais["MANUTENÇÃO PREVENTIVA"]
-    )
-
-    h_mec = (
-        totais["MECÂNICA CORRETIVA"]
-    )
-
-    h_parada_externa = (
-        totais["PARADA EXTERNA"]
-    )
-
-    h_administrativa = (
-        totais["ADMINISTRATIVO"]
-        +
-        totais["SEGURANÇA"]
-    )
-
-    # --------------------------------------------------------
-    # HORAS DE PARADA
-    # --------------------------------------------------------
-
-    horas_parada = (
-
-        h_prev
-
-        +
-
-        h_mec
-
-        +
-
-        h_parada_externa
-
-        +
-
-        h_administrativa
-
-    )
-
-    # --------------------------------------------------------
-    # INDICADORES
-    # --------------------------------------------------------
-
-    rop = (
-
-        metros_furados
-        /
-        h_direta
-
-        if h_direta > 0
-
-        else 0
-
-    )
-
-    disponibilidade_fisica = (
-
-        (
-            horas_programadas
-            -
-            h_mec
-        )
-
-        /
-
-        horas_programadas
-
-        *
-
-        100
-
-        if horas_programadas > 0
-
-        else 0
-
-    )
-
-    base_utilizacao = (
-        horas_programadas
-        -
-        h_mec
-    )
-
-    utilizacao = (
-
-        h_direta
-        /
-        base_utilizacao
-        *
-        100
-
-        if base_utilizacao > 0
-
-        else 0
-
-    )
-
-    return {
-
-        "metros_furados":
-            metros_furados,
-
-        "recuperacao_m":
-            recuperacao_m,
-
-        "recuperacao_pct":
-            recuperacao_pct,
-
-        "horas_programadas":
-            horas_programadas,
-
-        "rop":
-            rop,
-
-        "h_direta":
-            h_direta,
-
-        "h_apoio":
-            h_apoio,
-
-        "h_prev":
-            h_prev,
-
-        "h_mec":
-            h_mec,
-
-        "h_parada_externa":
-            h_parada_externa,
-
-        "h_administrativa":
-            h_administrativa,
-
-        "horas_parada":
-            horas_parada,
-
-        "disponibilidade_fisica":
-            disponibilidade_fisica,
-
-        "utilizacao":
-            utilizacao
-    }
 
 
 # ============================================================
-# EXCEL
+# GERAÇÃO EXCEL
 # ============================================================
 
 def excel_boletim(boletim_id):
@@ -849,18 +603,25 @@ def excel_boletim(boletim_id):
         Side
     )
 
-    from openpyxl.utils import (
-        get_column_letter
-    )
+    from openpyxl.utils import get_column_letter
 
-    b = query(
+
+    boletim_df = query(
         """
         SELECT *
         FROM boletins
         WHERE id=?
         """,
         (boletim_id,)
-    ).iloc[0].to_dict()
+    )
+
+
+    if boletim_df.empty:
+        return None
+
+
+    b = boletim_df.iloc[0].to_dict()
+
 
     man = query(
         """
@@ -871,6 +632,7 @@ def excel_boletim(boletim_id):
         """,
         (boletim_id,)
     )
+
 
     ap = query(
         """
@@ -883,7 +645,7 @@ def excel_boletim(boletim_id):
         FROM apontamentos p
 
         LEFT JOIN atividades a
-            ON p.codigo_atividade=a.codigo
+        ON p.codigo_atividade = a.codigo
 
         WHERE p.boletim_id=?
 
@@ -892,21 +654,28 @@ def excel_boletim(boletim_id):
         (boletim_id,)
     )
 
-    resumo = resumo_operacional_boletim(
-        boletim_id
-    )
 
     sondas = query(
-        "SELECT * FROM sondas"
+        """
+        SELECT *
+        FROM sondas
+        """
     )
 
     equipes = query(
-        "SELECT * FROM equipes"
+        """
+        SELECT *
+        FROM equipes
+        """
     )
 
     furos = query(
-        "SELECT * FROM furos"
+        """
+        SELECT *
+        FROM furos
+        """
     )
+
 
     wb = Workbook()
 
@@ -914,29 +683,25 @@ def excel_boletim(boletim_id):
 
     ws.title = "BOLETIM_DDH"
 
+
     # --------------------------------------------------------
-    # CORES
+    # ESTILOS
     # --------------------------------------------------------
 
     dark = PatternFill(
         "solid",
-        fgColor="1F4E45"
+        fgColor="17365D"
     )
 
     light = PatternFill(
         "solid",
-        fgColor="D9EAD3"
-    )
-
-    yellow = PatternFill(
-        "solid",
-        fgColor="FFF2CC"
+        fgColor="D9EAF7"
     )
 
     white = Font(
         color="FFFFFF",
         bold=True,
-        size=12
+        size=14
     )
 
     bold = Font(
@@ -948,20 +713,12 @@ def excel_boletim(boletim_id):
         color="808080"
     )
 
-    border = Border(
-        left=thin,
-        right=thin,
-        top=thin,
-        bottom=thin
-    )
 
     # --------------------------------------------------------
     # TÍTULO
     # --------------------------------------------------------
 
-    ws.merge_cells(
-        "A1:J1"
-    )
+    ws.merge_cells("A1:J1")
 
     ws["A1"] = (
         "BOLETIM DE SONDAGEM "
@@ -969,18 +726,16 @@ def excel_boletim(boletim_id):
     )
 
     ws["A1"].fill = dark
-    ws["A1"].font = Font(
-        color="FFFFFF",
-        bold=True,
-        size=14
-    )
+
+    ws["A1"].font = white
 
     ws["A1"].alignment = Alignment(
         horizontal="center"
     )
 
+
     # --------------------------------------------------------
-    # IDENTIFICAÇÃO
+    # INFORMAÇÕES
     # --------------------------------------------------------
 
     sonda = safe_name(
@@ -1001,15 +756,16 @@ def excel_boletim(boletim_id):
         b.get("furo_id")
     )
 
+
     info = [
 
-        ("Data", b["data"]),
+        ("Data", b.get("data")),
 
-        ("Turno", b["turno"]),
+        ("Turno", b.get("turno")),
 
-        ("Projeto", b["projeto"]),
+        ("Projeto", b.get("projeto")),
 
-        ("Cliente", b["cliente"]),
+        ("Cliente", b.get("cliente")),
 
         ("Sonda", sonda),
 
@@ -1019,17 +775,19 @@ def excel_boletim(boletim_id):
 
         (
             "Horímetro inicial",
-            b["horimetro_inicial"]
+            b.get("horimetro_inicial")
         ),
 
         (
             "Horímetro final",
-            b["horimetro_final"]
+            b.get("horimetro_final")
         )
 
     ]
 
+
     r = 3
+
 
     for label, value in info:
 
@@ -1047,27 +805,26 @@ def excel_boletim(boletim_id):
 
         r += 1
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # MANOBRAS
-    # --------------------------------------------------------
+    # ========================================================
 
     r += 1
+
 
     ws.cell(
         r,
         1,
         "MANOBRAS / PERFURAÇÃO"
-    )
-
-    ws.cell(
-        r,
-        1
     ).fill = dark
+
 
     ws.cell(
         r,
         1
     ).font = white
+
 
     ws.merge_cells(
         start_row=r,
@@ -1076,36 +833,27 @@ def excel_boletim(boletim_id):
         end_column=10
     )
 
+
     r += 1
+
 
     heads = [
 
         "Nº",
-
         "De (m)",
-
         "Até (m)",
-
         "Avanço (m)",
-
         "Recuperado (m)",
-
         "Rec. %",
-
         "DIP",
-
         "QAQC",
-
         "Perfil",
-
         "Fluido"
 
     ]
 
-    for c, h in enumerate(
-        heads,
-        1
-    ):
+
+    for c, h in enumerate(heads, 1):
 
         ws.cell(
             r,
@@ -1118,9 +866,11 @@ def excel_boletim(boletim_id):
             c
         ).font = bold
 
+
     for _, x in man.iterrows():
 
         r += 1
+
 
         av = (
             float(x["ate_m"] or 0)
@@ -1128,26 +878,15 @@ def excel_boletim(boletim_id):
             float(x["de_m"] or 0)
         )
 
+
         rec = (
-
-            float(
-                x["recuperado_m"]
-                or 0
-            )
-
+            float(x["recuperado_m"] or 0)
             /
-
             av
-
             *
-
             100
+        ) if av else 0
 
-            if av
-
-            else 0
-
-        )
 
         vals = [
 
@@ -1173,10 +912,8 @@ def excel_boletim(boletim_id):
 
         ]
 
-        for c, v in enumerate(
-            vals,
-            1
-        ):
+
+        for c, v in enumerate(vals, 1):
 
             ws.cell(
                 r,
@@ -1184,27 +921,26 @@ def excel_boletim(boletim_id):
                 v
             )
 
-    # --------------------------------------------------------
-    # TEMPOS E PARADAS
-    # --------------------------------------------------------
+
+    # ========================================================
+    # ATIVIDADES
+    # ========================================================
 
     r += 2
+
 
     ws.cell(
         r,
         1,
-        "TEMPOS E PARADAS"
-    )
-
-    ws.cell(
-        r,
-        1
+        "ATIVIDADES / HORAS"
     ).fill = dark
+
 
     ws.cell(
         r,
         1
     ).font = white
+
 
     ws.merge_cells(
         start_row=r,
@@ -1213,34 +949,26 @@ def excel_boletim(boletim_id):
         end_column=9
     )
 
+
     r += 1
+
 
     heads = [
 
         "Código",
-
         "Grupo",
-
-        "Atividade / Evento",
-
+        "Atividade",
         "Classificação",
-
         "Início",
-
         "Fim",
-
-        "Duração (h)",
-
-        "Duração (min)",
-
-        "Observações"
+        "Horas",
+        "Horímetro",
+        "Observação"
 
     ]
 
-    for c, h in enumerate(
-        heads,
-        1
-    ):
+
+    for c, h in enumerate(heads, 1):
 
         ws.cell(
             r,
@@ -1248,23 +976,17 @@ def excel_boletim(boletim_id):
             h
         ).fill = light
 
+
         ws.cell(
             r,
             c
         ).font = bold
 
+
     for _, x in ap.iterrows():
 
         r += 1
 
-        minutos = round(
-            float(
-                x["horas"]
-                or 0
-            )
-            *
-            60
-        )
 
         vals = [
 
@@ -1282,16 +1004,14 @@ def excel_boletim(boletim_id):
 
             x["horas"],
 
-            minutos,
+            x["horimetro"],
 
             x["observacao"]
 
         ]
 
-        for c, v in enumerate(
-            vals,
-            1
-        ):
+
+        for c, v in enumerate(vals, 1):
 
             ws.cell(
                 r,
@@ -1299,228 +1019,52 @@ def excel_boletim(boletim_id):
                 v
             )
 
-    # --------------------------------------------------------
-    # RESUMO OPERACIONAL
-    # --------------------------------------------------------
 
-    r += 2
-
-    ws.cell(
-        r,
-        1,
-        "RESUMO OPERACIONAL DO TURNO"
-    )
-
-    ws.cell(
-        r,
-        1
-    ).fill = dark
-
-    ws.cell(
-        r,
-        1
-    ).font = white
-
-    ws.merge_cells(
-        start_row=r,
-        start_column=1,
-        end_row=r,
-        end_column=10
-    )
-
-    r += 1
-
-    resumo_excel = [
-
-        (
-            "METROS FURADOS",
-            f"{resumo['metros_furados']:.2f} m"
-        ),
-
-        (
-            "RECUPERAÇÃO (m)",
-            f"{resumo['recuperacao_m']:.2f} m"
-        ),
-
-        (
-            "RECUPERAÇÃO %",
-            f"{resumo['recuperacao_pct']:.1f}%"
-        ),
-
-        (
-            "HORAS PROGRAMADAS",
-            f"{resumo['horas_programadas']:.2f} h"
-        ),
-
-        (
-            "ROP (m/h)",
-            f"{resumo['rop']:.2f}"
-        ),
-
-        (
-            "H. DIRETA",
-            f"{resumo['h_direta']:.2f}"
-        ),
-
-        (
-            "H. APOIO OPERACIONAL",
-            f"{resumo['h_apoio']:.2f}"
-        ),
-
-        (
-            "H. MANUT. PREVENTIVA",
-            f"{resumo['h_prev']:.2f}"
-        ),
-
-        (
-            "H. MECÂNICA CORRETIVA",
-            f"{resumo['h_mec']:.2f}"
-        ),
-
-        (
-            "H. PARADA EXTERNA",
-            f"{resumo['h_parada_externa']:.2f}"
-        ),
-
-        (
-            "H. ADMINISTRATIVA",
-            f"{resumo['h_administrativa']:.2f}"
-        ),
-
-        (
-            "HORAS DE PARADA",
-            f"{resumo['horas_parada']:.2f}"
-        ),
-
-        (
-            "DISPONIBILIDADE FÍSICA",
-            f"{resumo['disponibilidade_fisica']:.1f}%"
-        ),
-
-        (
-            "UTILIZAÇÃO",
-            f"{resumo['utilizacao']:.1f}%"
-        )
-
-    ]
-
-    for label, value in resumo_excel:
-
-        ws.cell(
-            r,
-            1,
-            label
-        ).fill = light
-
-        ws.cell(
-            r,
-            1
-        ).font = bold
-
-        ws.cell(
-            r,
-            2,
-            value
-        )
-
-        r += 1
-
-    # --------------------------------------------------------
-    # OBSERVAÇÕES GERAIS
-    # --------------------------------------------------------
-
-    r += 1
-
-    ws.cell(
-        r,
-        1,
-        "OBSERVAÇÕES GERAIS"
-    )
-
-    ws.cell(
-        r,
-        1
-    ).fill = dark
-
-    ws.cell(
-        r,
-        1
-    ).font = white
-
-    ws.merge_cells(
-        start_row=r,
-        start_column=1,
-        end_row=r,
-        end_column=10
-    )
-
-    r += 1
-
-    ws.merge_cells(
-        start_row=r,
-        start_column=1,
-        end_row=r + 3,
-        end_column=10
-    )
-
-    ws.cell(
-        r,
-        1,
-        b.get("observacoes")
-        or ""
-    )
-
-    ws.cell(
-        r,
-        1
-    ).fill = yellow
-
-    ws.cell(
-        r,
-        1
-    ).alignment = Alignment(
-        wrap_text=True,
-        vertical="top"
-    )
-
-    # --------------------------------------------------------
+    # ========================================================
     # FORMATAÇÃO
-    # --------------------------------------------------------
+    # ========================================================
 
     for row in ws.iter_rows():
 
         for cell in row:
 
-            cell.border = border
+            cell.border = Border(
+
+                left=thin,
+                right=thin,
+                top=thin,
+                bottom=thin
+
+            )
+
 
             cell.alignment = Alignment(
-                vertical="center",
-                wrap_text=True
+                vertical="center"
             )
+
 
     widths = [
 
-        14,
+        12,
+        20,
+        28,
         22,
-        35,
-        25,
-        14,
-        14,
-        14,
+        18,
         15,
-        35,
+        12,
+        20,
+        25,
         20
 
     ]
 
-    for i, w in enumerate(
-        widths,
-        1
-    ):
+
+    for i, w in enumerate(widths, 1):
 
         ws.column_dimensions[
             get_column_letter(i)
         ].width = w
+
 
     out = BytesIO()
 
@@ -1533,9 +1077,8 @@ def excel_boletim(boletim_id):
 # SIDEBAR
 # ============================================================
 
-st.sidebar.title(
-    "⛏️ DDH CAMPO"
-)
+st.sidebar.title("⛏️ DDH CAMPO")
+
 
 page = st.sidebar.radio(
 
@@ -1544,17 +1087,11 @@ page = st.sidebar.radio(
     [
 
         "🏠 Painel DDH",
-
         "📝 Novo Boletim",
-
         "📋 Boletins Salvos",
-
         "👷 Colaboradores",
-
         "👥 Equipes",
-
         "🔩 Sondas",
-
         "⚙️ Cadastros"
 
     ]
@@ -1563,22 +1100,29 @@ page = st.sidebar.radio(
 
 
 # ============================================================
-# PAINEL
+# PAINEL DDH
 # ============================================================
 
 if page == "🏠 Painel DDH":
 
-    st.title(
-        "📊 PAINEL DDH"
-    )
+    st.title("📊 PAINEL DDH")
+
 
     boletins = query(
-        "SELECT * FROM boletins"
+        """
+        SELECT *
+        FROM boletins
+        """
     )
 
+
     man = query(
-        "SELECT * FROM manobras"
+        """
+        SELECT *
+        FROM manobras
+        """
     )
+
 
     ap = query(
         """
@@ -1589,119 +1133,93 @@ if page == "🏠 Painel DDH":
         FROM apontamentos p
 
         LEFT JOIN atividades a
-            ON p.codigo_atividade=a.codigo
+        ON p.codigo_atividade = a.codigo
         """
     )
 
-    metros = (
 
-        0.0
+    metros = 0.0
 
-        if man.empty
 
-        else float(
+    if not man.empty:
 
+        metros = float(
             (
                 man["ate_m"].fillna(0)
                 -
                 man["de_m"].fillna(0)
             ).sum()
-
         )
 
-    )
 
-    rec_total = (
+    rec_total = 0.0
 
-        0.0
 
-        if man.empty
+    if not man.empty:
 
-        else float(
-
-            man["recuperado_m"]
-            .fillna(0)
-            .sum()
-
+        rec_total = float(
+            man[
+                "recuperado_m"
+            ].fillna(0).sum()
         )
 
-    )
 
     rec_pct = (
-
         rec_total
         /
         metros
         *
         100
+    ) if metros else 0
 
-        if metros
 
-        else 0
+    horas_op = 0.0
 
-    )
 
-    horas_op = (
+    if not ap.empty:
 
-        0.0
-
-        if ap.empty
-
-        else float(
+        horas_op = float(
 
             ap.loc[
                 ap["classificacao"]
                 ==
                 "OPERAÇÃO DIRETA",
+
                 "horas"
-            ]
 
-            .fillna(0)
-
-            .sum()
+            ].fillna(0).sum()
 
         )
 
-    )
 
-    horas_mec = (
+    horas_mec = 0.0
 
-        0.0
 
-        if ap.empty
+    if not ap.empty:
 
-        else float(
+        horas_mec = float(
 
             ap.loc[
                 ap["classificacao"]
                 ==
                 "MECÂNICA CORRETIVA",
+
                 "horas"
-            ]
 
-            .fillna(0)
-
-            .sum()
+            ].fillna(0).sum()
 
         )
 
-    )
 
-    horas_total = (
+    horas_total = 0.0
 
-        0.0
 
-        if ap.empty
+    if not ap.empty:
 
-        else float(
-
-            ap["horas"]
-            .fillna(0)
-            .sum()
-
+        horas_total = float(
+            ap["horas"].fillna(0).sum()
         )
 
-    )
 
     disponibilidade = (
 
@@ -1712,18 +1230,13 @@ if page == "🏠 Painel DDH":
         )
 
         /
-
         horas_total
 
         *
-
         100
 
-        if horas_total
+    ) if horas_total else 0
 
-        else 0
-
-    )
 
     utilizacao = (
 
@@ -1738,15 +1251,14 @@ if page == "🏠 Painel DDH":
         *
         100
 
-        if (
-            horas_total
-            -
-            horas_mec
-        ) > 0
+    ) if (
 
-        else 0
+        horas_total
+        -
+        horas_mec
 
-    )
+    ) > 0 else 0
+
 
     rop = (
 
@@ -1754,11 +1266,8 @@ if page == "🏠 Painel DDH":
         /
         horas_op
 
-        if horas_op
+    ) if horas_op else 0
 
-        else 0
-
-    )
 
     c = st.columns(4)
 
@@ -1782,34 +1291,42 @@ if page == "🏠 Painel DDH":
         f"{rop:.2f} m/h"
     )
 
+
     c = st.columns(3)
+
 
     c[0].metric(
         "HORAS APONTADAS",
         f"{horas_total:.2f} h"
     )
 
+
     c[1].metric(
         "MECÂNICA CORRETIVA",
         f"{horas_mec:.2f} h"
     )
+
 
     c[2].metric(
         "DISPONIBILIDADE",
         f"{disponibilidade:.1f}%"
     )
 
+
     st.subheader(
         "Resumo por classificação"
     )
+
 
     if not ap.empty:
 
         resumo = (
 
             ap.groupby(
+
                 "classificacao",
                 dropna=False
+
             )["horas"]
 
             .sum()
@@ -1818,11 +1335,13 @@ if page == "🏠 Painel DDH":
 
         )
 
+
         st.bar_chart(
             resumo.set_index(
                 "classificacao"
             )
         )
+
 
     else:
 
@@ -1841,45 +1360,62 @@ elif page == "📝 Novo Boletim":
         "📝 NOVO RDO / BOLETIM DDH"
     )
 
+
     df_s, map_s = entity_options(
+
         "sondas",
         "codigo",
         "status != 'Inativa'"
+
     )
 
+
     df_e, map_e = entity_options(
+
         "equipes",
         "codigo",
         "status != 'Inativa'"
+
     )
+
 
     df_f, map_f = entity_options(
+
         "furos",
         "identificacao"
+
     )
 
+
     if (
+
         df_s.empty
         or
         df_e.empty
         or
         df_f.empty
+
     ):
 
         st.warning(
-            "Cadastre pelo menos uma Sonda, "
-            "uma Equipe e um Furo antes "
-            "de criar o boletim."
+
+            "Cadastre pelo menos uma "
+            "Sonda, uma Equipe e um Furo "
+            "antes de criar o boletim."
+
         )
 
         st.stop()
 
+
     if (
         "boletim_edit_id"
-        not in st.session_state
+        not in
+        st.session_state
     ):
 
         st.session_state.boletim_edit_id = None
+
 
     # --------------------------------------------------------
     # CABEÇALHO
@@ -1887,34 +1423,56 @@ elif page == "📝 Novo Boletim":
 
     with st.form("cabecalho"):
 
+
         a, b, c, d = st.columns(4)
 
+
         data_b = a.date_input(
+
             "Data",
+
             value=date.today()
+
         )
+
 
         turno = b.selectbox(
+
             "Turno",
+
             [
+
                 "Diurno",
                 "Noturno"
+
             ]
+
         )
+
 
         sonda_id = c.selectbox(
+
             "Sonda",
-            list(map_s.keys()),
-            format_func=lambda x: map_s[x]
+
+            list(
+                map_s.keys()
+            ),
+
+            format_func=lambda x:
+                map_s[x]
+
         )
 
+
         equipe_padrao = None
+
 
         row_s = df_s[
             df_s["id"]
             ==
             sonda_id
         ]
+
 
         if (
             not row_s.empty
@@ -1925,12 +1483,19 @@ elif page == "📝 Novo Boletim":
         ):
 
             equipe_padrao = int(
-                row_s.iloc[0]["equipe_id"]
+
+                row_s.iloc[0][
+                    "equipe_id"
+                ]
+
             )
+
 
         idx_e = (
 
-            list(map_e.keys()).index(
+            list(
+                map_e.keys()
+            ).index(
                 equipe_padrao
             )
 
@@ -1940,51 +1505,88 @@ elif page == "📝 Novo Boletim":
 
         )
 
+
         equipe_id = d.selectbox(
+
             "Equipe",
-            list(map_e.keys()),
+
+            list(
+                map_e.keys()
+            ),
+
             index=idx_e,
-            format_func=lambda x: map_e[x]
+
+            format_func=lambda x:
+                map_e[x]
+
         )
+
 
         a, b, c, d = st.columns(4)
 
+
         furo_id = a.selectbox(
+
             "Furo",
-            list(map_f.keys()),
-            format_func=lambda x: map_f[x]
+
+            list(
+                map_f.keys()
+            ),
+
+            format_func=lambda x:
+                map_f[x]
+
         )
+
 
         projeto = b.text_input(
             "Projeto"
         )
 
+
         cliente = c.text_input(
             "Cliente"
         )
 
+
         h_ini = d.number_input(
+
             "Horímetro Inicial",
+
             min_value=0.0,
+
             step=0.1
+
         )
 
+
         h_fim = st.number_input(
+
             "Horímetro Final",
+
             min_value=0.0,
+
             step=0.1
+
         )
+
 
         observacoes = st.text_area(
             "Observações gerais"
         )
 
+
         salvar = st.form_submit_button(
+
             "💾 Criar Boletim",
+
             type="primary"
+
         )
 
+
     if salvar:
+
 
         if (
             h_fim
@@ -1993,14 +1595,21 @@ elif page == "📝 Novo Boletim":
         ):
 
             st.error(
-                "Horímetro final não pode "
-                "ser menor que o inicial."
+
+                "Horímetro final "
+                "não pode ser menor "
+                "que o inicial."
+
             )
+
 
         else:
 
+
             bid = execute(
+
                 """
+
                 INSERT INTO boletins
                 (
                     data,
@@ -2018,87 +1627,150 @@ elif page == "📝 Novo Boletim":
 
                 VALUES
                 (
-                    ?,?,?,?,?,?,?,?,?,?,?
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?
                 )
+
                 """,
+
                 (
+
                     str(data_b),
+
                     turno,
+
                     projeto,
+
                     cliente,
+
                     int(sonda_id),
+
                     int(equipe_id),
+
                     int(furo_id),
+
                     h_ini,
+
                     h_fim,
+
                     observacoes,
+
                     datetime.now().isoformat()
+
                 )
+
             )
+
 
             st.session_state.boletim_edit_id = bid
 
+
             st.success(
-                "Boletim criado. Agora adicione "
-                "manobras e atividades abaixo."
+
+                "Boletim criado. "
+                "Agora adicione manobras "
+                "e atividades abaixo."
+
             )
+
 
             st.rerun()
 
+
+    # --------------------------------------------------------
+    # LANÇAMENTOS
+    # --------------------------------------------------------
+
     bid = st.session_state.boletim_edit_id
 
-    # ========================================================
-    # CONTEÚDO DO BOLETIM
-    # ========================================================
 
     if bid:
 
-        # ----------------------------------------------------
-        # MANOBRAS
-        # ----------------------------------------------------
 
         st.divider()
 
+
+        # ====================================================
+        # MANOBRAS
+        # ====================================================
+
         st.subheader(
-            "⛏️ MANOBRAS E PERFURAÇÃO"
+            "⛏️ Manobras e Perfuração"
         )
 
+
         with st.form(
+
             "nova_manobra",
+
             clear_on_submit=True
+
         ):
+
 
             c1, c2, c3, c4 = st.columns(4)
 
+
             numero = c1.number_input(
+
                 "Nº",
+
                 min_value=1,
+
                 value=1,
+
                 step=1
+
             )
+
 
             de_m = c2.number_input(
+
                 "De (m)",
+
                 min_value=0.0,
+
                 step=0.1
+
             )
+
 
             ate_m = c3.number_input(
+
                 "Até (m)",
+
                 min_value=0.0,
+
                 step=0.1
+
             )
 
+
             recuperado = c4.number_input(
+
                 "Recuperado (m)",
+
                 min_value=0.0,
+
                 step=0.01
+
             )
+
 
             av = max(
                 0.0,
                 ate_m - de_m
             )
+
 
             rec = (
 
@@ -2108,71 +1780,92 @@ elif page == "📝 Novo Boletim":
                 *
                 100
 
-                if av
+            ) if av else 0
 
-                else 0
-
-            )
 
             st.info(
-                f"Avanço automático: {av:.2f} m "
-                f"| Recuperação automática: "
+
+                f"Avanço automático: "
+                f"{av:.2f} m | "
+
+                f"Recuperação automática: "
                 f"{rec:.1f}%"
+
             )
 
+
             c1, c2, c3, c4, c5 = st.columns(5)
+
 
             dip = c1.number_input(
                 "DIP",
                 step=0.1
             )
 
+
             qaqc = c2.text_input(
                 "QAQC"
             )
+
 
             perfil = c3.text_input(
                 "Perfil / Diâmetro"
             )
 
+
             coroa = c4.text_input(
                 "Coroa / Série"
             )
+
 
             revestimento = c5.text_input(
                 "Revestimento"
             )
 
+
             fluido = st.text_input(
                 "Tipo de Fluido"
             )
+
 
             add = st.form_submit_button(
                 "➕ Adicionar Manobra"
             )
 
+
         if add:
+
 
             if ate_m <= de_m:
 
                 st.error(
-                    "O valor 'Até' deve ser "
-                    "maior que 'De'."
+
+                    "O valor 'Até' deve "
+                    "ser maior que 'De'."
+
                 )
+
 
             elif recuperado > (
                 ate_m - de_m
             ):
 
                 st.error(
-                    "A recuperação não pode ser "
-                    "maior que o avanço."
+
+                    "A recuperação não "
+                    "pode ser maior "
+                    "que o avanço."
+
                 )
+
 
             else:
 
+
                 execute(
+
                     """
+
                     INSERT INTO manobras
                     (
                         boletim_id,
@@ -2190,528 +1883,428 @@ elif page == "📝 Novo Boletim":
 
                     VALUES
                     (
-                        ?,?,?,?,?,?,?,?,?,?,?
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?,
+                        ?
                     )
+
                     """,
+
                     (
+
                         bid,
+
                         numero,
+
                         de_m,
+
                         ate_m,
+
                         recuperado,
+
                         dip,
+
                         qaqc,
+
                         perfil,
+
                         coroa,
+
                         revestimento,
+
                         fluido
+
                     )
+
                 )
+
 
                 st.success(
                     "Manobra adicionada."
                 )
 
+
                 st.rerun()
 
+
         dfm = query(
+
             """
+
             SELECT *
             FROM manobras
+
             WHERE boletim_id=?
+
             ORDER BY numero
+
             """,
+
             (bid,)
+
         )
+
 
         if not dfm.empty:
 
+
             view = dfm.copy()
 
+
             view["Avanço"] = (
+
                 view["ate_m"]
                 -
                 view["de_m"]
+
             )
+
 
             view["Recuperação %"] = (
 
-                view["recuperado_m"]
+                view[
+                    "recuperado_m"
+                ]
 
                 /
 
-                view["Avanço"].replace(
+                view[
+                    "Avanço"
+                ].replace(
                     0,
                     pd.NA
                 )
 
                 *
-
                 100
 
             ).round(1)
 
+
             st.dataframe(
+
                 view,
+
                 use_container_width=True,
+
                 hide_index=True
+
             )
 
-        # ====================================================
-        # TEMPOS E PARADAS
-        # ====================================================
 
         st.divider()
 
+
+        # ====================================================
+        # ATIVIDADES
+        # ====================================================
+
         st.subheader(
-            "⏱️ TEMPOS E PARADAS"
+            "⏱️ Atividades e Horários"
         )
 
-        st.caption(
-            "Selecione o código da atividade. "
-            "O grupo, atividade e classificação "
-            "serão preenchidos automaticamente."
-        )
 
         acts = query(
+
             """
+
             SELECT *
             FROM atividades
+
             ORDER BY codigo
+
             """
+
         )
 
-        codes = acts["codigo"].tolist()
 
-        if len(codes) == 0:
+        codes = acts[
+            "codigo"
+        ].tolist()
 
-            st.warning(
-                "Nenhum código de atividade "
-                "cadastrado."
+
+        with st.form(
+
+            "nova_atividade",
+
+            clear_on_submit=True
+
+        ):
+
+
+            codigo = st.selectbox(
+
+                "Código da atividade",
+
+                codes
+
             )
 
-        else:
 
-            with st.form(
-                "nova_atividade",
-                clear_on_submit=True
-            ):
+            ar = activity_row(
+                codigo
+            )
 
-                c1, c2 = st.columns(
-                    [1, 3]
+
+            c1, c2, c3 = st.columns(3)
+
+
+            c1.text_input(
+
+                "Grupo",
+
+                value=ar.get(
+                    "grupo",
+                    ""
+                ),
+
+                disabled=True
+
+            )
+
+
+            c2.text_input(
+
+                "Atividade",
+
+                value=ar.get(
+                    "atividade",
+                    ""
+                ),
+
+                disabled=True
+
+            )
+
+
+            c3.text_input(
+
+                "Classificação",
+
+                value=ar.get(
+                    "classificacao",
+                    ""
+                ),
+
+                disabled=True
+
+            )
+
+
+            c1, c2, c3, c4 = st.columns(4)
+
+
+            inicio = c1.time_input(
+
+                "Hora inicial",
+
+                value=time(
+                    7,
+                    0
                 )
 
-                codigo = c1.selectbox(
-                    "Código da atividade",
-                    codes
+            )
+
+
+            fim = c2.time_input(
+
+                "Hora final",
+
+                value=time(
+                    8,
+                    0
                 )
 
-                ar = activity_row(
-                    codigo
+            )
+
+
+            horas = horas_intervalo(
+                inicio,
+                fim
+            )
+
+
+            c3.metric(
+
+                "Tempo automático",
+
+                f"{horas:.2f} h"
+
+            )
+
+
+            horimetro = c4.number_input(
+
+                "Horímetro",
+
+                min_value=0.0,
+
+                step=0.1
+
+            )
+
+
+            obs = st.text_input(
+                "Observação"
+            )
+
+
+            add_a = st.form_submit_button(
+
+                "➕ Adicionar Atividade"
+
+            )
+
+
+        if add_a:
+
+
+            execute(
+
+                """
+
+                INSERT INTO apontamentos
+                (
+                    boletim_id,
+                    codigo_atividade,
+                    hora_inicio,
+                    hora_fim,
+                    horas,
+                    horimetro,
+                    observacao
                 )
 
-                c2.info(
-                    f"""
-**Grupo:** {ar.get("grupo", "")}
-
-**Atividade / Evento:** {ar.get("atividade", "")}
-
-**Classificação:** {ar.get("classificacao", "")}
-                    """
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?
                 )
 
-                st.markdown(
-                    "### Horário"
+                """,
+
+                (
+
+                    bid,
+
+                    int(codigo),
+
+                    inicio.strftime(
+                        "%H:%M"
+                    ),
+
+                    fim.strftime(
+                        "%H:%M"
+                    ),
+
+                    horas,
+
+                    horimetro,
+
+                    obs
+
                 )
 
-                c1, c2, c3, c4 = st.columns(4)
+            )
 
-                inicio = c1.time_input(
-                    "Início",
-                    value=time(7, 0)
-                )
 
-                fim = c2.time_input(
-                    "Fim",
-                    value=time(8, 0)
-                )
+            st.success(
+                "Atividade adicionada."
+            )
 
-                horas = horas_intervalo(
-                    inicio,
-                    fim
-                )
 
-                minutos = round(
-                    horas * 60
-                )
+            st.rerun()
 
-                c3.metric(
-                    "Duração (h)",
-                    f"{horas:.2f}"
-                )
-
-                c4.metric(
-                    "Duração (min)",
-                    f"{minutos}"
-                )
-
-                c1, c2 = st.columns(2)
-
-                horimetro = c1.number_input(
-                    "Horímetro",
-                    min_value=0.0,
-                    step=0.1
-                )
-
-                obs = c2.text_input(
-                    "Observações"
-                )
-
-                add_a = st.form_submit_button(
-                    "➕ ADICIONAR ATIVIDADE",
-                    type="primary"
-                )
-
-            if add_a:
-
-                execute(
-                    """
-                    INSERT INTO apontamentos
-                    (
-                        boletim_id,
-                        codigo_atividade,
-                        hora_inicio,
-                        hora_fim,
-                        horas,
-                        horimetro,
-                        observacao
-                    )
-
-                    VALUES
-                    (
-                        ?,?,?,?,?,?,?
-                    )
-                    """,
-                    (
-                        bid,
-                        int(codigo),
-                        inicio.strftime("%H:%M"),
-                        fim.strftime("%H:%M"),
-                        horas,
-                        horimetro,
-                        obs
-                    )
-                )
-
-                st.success(
-                    "Atividade adicionada "
-                    "com sucesso."
-                )
-
-                st.rerun()
 
         # ----------------------------------------------------
-        # TABELA DE TEMPOS E PARADAS
+        # TABELA DE ATIVIDADES
         # ----------------------------------------------------
 
         dfa = query(
+
             """
+
             SELECT
 
                 p.id,
 
-                p.codigo_atividade
-                AS "Código",
+                p.codigo_atividade,
 
-                a.grupo
-                AS "Grupo",
+                a.grupo,
 
-                a.atividade
-                AS "Atividade / Evento",
+                a.atividade,
 
-                a.classificacao
-                AS "Classificação",
+                a.classificacao,
 
-                p.hora_inicio
-                AS "Início",
+                p.hora_inicio,
 
-                p.hora_fim
-                AS "Fim",
+                p.hora_fim,
 
-                p.horas
-                AS "Duração (h)",
+                p.horas,
 
-                ROUND(
-                    p.horas * 60
-                )
-                AS "Duração (min)",
+                p.horimetro,
 
                 p.observacao
-                AS "Observações"
 
             FROM apontamentos p
 
             LEFT JOIN atividades a
-                ON a.codigo=p.codigo_atividade
+
+            ON a.codigo =
+                p.codigo_atividade
 
             WHERE p.boletim_id=?
 
             ORDER BY p.id
+
             """,
+
             (bid,)
+
         )
 
-        if dfa.empty:
 
-            st.info(
-                "Nenhuma atividade lançada "
-                "neste boletim."
-            )
+        if not dfa.empty:
 
-        else:
-
-            tabela_visual = dfa.drop(
-                columns=["id"]
-            )
 
             st.dataframe(
-                tabela_visual,
+
+                dfa,
+
                 use_container_width=True,
+
                 hide_index=True
+
             )
 
-            # ------------------------------------------------
-            # EXCLUIR ATIVIDADE
-            # ------------------------------------------------
-
-            st.markdown(
-                "#### 🗑️ Excluir lançamento"
-            )
-
-            opcoes_excluir = (
-                dfa["id"].tolist()
-            )
-
-            def descricao_apontamento(
-                id_ap
-            ):
-
-                linha = dfa[
-                    dfa["id"]
-                    ==
-                    id_ap
-                ].iloc[0]
-
-                return (
-
-                    f"Código {linha['Código']} | "
-
-                    f"{linha['Atividade / Evento']} | "
-
-                    f"{linha['Início']} - "
-
-                    f"{linha['Fim']}"
-
-                )
-
-            c1, c2 = st.columns(
-                [4, 1]
-            )
-
-            apontamento_excluir = c1.selectbox(
-                "Selecione a atividade",
-                opcoes_excluir,
-                format_func=descricao_apontamento
-            )
-
-            if c2.button(
-                "🗑️ Excluir"
-            ):
-
-                delete(
-                    "apontamentos",
-                    apontamento_excluir
-                )
-
-                st.success(
-                    "Atividade excluída."
-                )
-
-                st.rerun()
-
-        # ====================================================
-        # RESUMO OPERACIONAL DO TURNO
-        # ====================================================
 
         st.divider()
 
-        st.subheader(
-            "📊 RESUMO OPERACIONAL DO TURNO"
-        )
-
-        resumo = resumo_operacional_boletim(
-            bid
-        )
 
         # ----------------------------------------------------
-        # LINHA 1
-        # ----------------------------------------------------
-
-        c1, c2, c3, c4, c5 = st.columns(5)
-
-        c1.metric(
-            "METROS FURADOS",
-            f"{resumo['metros_furados']:.2f} m"
-        )
-
-        c2.metric(
-            "RECUPERAÇÃO (m)",
-            f"{resumo['recuperacao_m']:.2f} m"
-        )
-
-        c3.metric(
-            "RECUPERAÇÃO %",
-            f"{resumo['recuperacao_pct']:.1f}%"
-        )
-
-        c4.metric(
-            "HORAS PROGRAMADAS",
-            f"{resumo['horas_programadas']:.2f} h"
-        )
-
-        c5.metric(
-            "ROP (m/h)",
-            f"{resumo['rop']:.2f}"
-        )
-
-        # ----------------------------------------------------
-        # LINHA 2
-        # ----------------------------------------------------
-
-        c1, c2, c3, c4, c5 = st.columns(5)
-
-        c1.metric(
-            "H. DIRETA",
-            f"{resumo['h_direta']:.2f} h"
-        )
-
-        c2.metric(
-            "H. APOIO OPERACIONAL",
-            f"{resumo['h_apoio']:.2f} h"
-        )
-
-        c3.metric(
-            "H. MANUT. PREVENTIVA",
-            f"{resumo['h_prev']:.2f} h"
-        )
-
-        c4.metric(
-            "H. MECÂNICA CORRETIVA",
-            f"{resumo['h_mec']:.2f} h"
-        )
-
-        c5.metric(
-            "H. PARADA EXTERNA",
-            f"{resumo['h_parada_externa']:.2f} h"
-        )
-
-        # ----------------------------------------------------
-        # LINHA 3
-        # ----------------------------------------------------
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        c1.metric(
-            "H. ADMINISTRATIVA",
-            f"{resumo['h_administrativa']:.2f} h"
-        )
-
-        c2.metric(
-            "HORAS DE PARADA",
-            f"{resumo['horas_parada']:.2f} h"
-        )
-
-        c3.metric(
-            "DISPONIBILIDADE FÍSICA",
-            f"{resumo['disponibilidade_fisica']:.1f}%"
-        )
-
-        c4.metric(
-            "UTILIZAÇÃO",
-            f"{resumo['utilizacao']:.1f}%"
-        )
-
-        # ====================================================
-        # OBSERVAÇÕES GERAIS
-        # ====================================================
-
-        st.divider()
-
-        st.subheader(
-            "📝 OBSERVAÇÕES GERAIS"
-        )
-
-        boletim_atual = query(
-            """
-            SELECT observacoes
-            FROM boletins
-            WHERE id=?
-            """,
-            (bid,)
-        )
-
-        obs_atual = ""
-
-        if not boletim_atual.empty:
-
-            obs_atual = (
-
-                boletim_atual
-                .iloc[0]["observacoes"]
-
-                or
-
-                ""
-
-            )
-
-        nova_obs = st.text_area(
-            "Observações gerais do turno",
-            value=obs_atual,
-            height=150,
-            key=f"observacoes_gerais_{bid}"
-        )
-
-        if st.button(
-            "💾 Salvar observações"
-        ):
-
-            execute(
-                """
-                UPDATE boletins
-                SET observacoes=?
-                WHERE id=?
-                """,
-                (
-                    nova_obs,
-                    bid
-                )
-            )
-
-            st.success(
-                "Observações salvas."
-            )
-
-        # ====================================================
         # EXCEL
-        # ====================================================
-
-        st.divider()
+        # ----------------------------------------------------
 
         if st.button(
+
             "📥 Gerar Excel deste Boletim",
+
             type="primary"
+
         ):
+
 
             st.download_button(
 
@@ -2719,15 +2312,15 @@ elif page == "📝 Novo Boletim":
 
                 excel_boletim(bid),
 
-                file_name=(
-                    f"BOLETIM_DDH_{bid}.xlsx"
-                ),
+                file_name=
+                    f"BOLETIM_DDH_{bid}.xlsx",
 
-                mime=(
+                mime=
                     "application/"
-                    "vnd.openxmlformats-officedocument."
+                    "vnd.openxmlformats-"
+                    "officedocument."
                     "spreadsheetml.sheet"
-                )
+
             )
 
 
@@ -2741,13 +2334,22 @@ elif page == "📋 Boletins Salvos":
         "📋 BOLETINS SALVOS"
     )
 
+
     df = query(
+
         """
+
         SELECT *
         FROM boletins
-        ORDER BY data DESC, id DESC
+
+        ORDER BY
+            data DESC,
+            id DESC
+
         """
+
     )
+
 
     if df.empty:
 
@@ -2755,22 +2357,37 @@ elif page == "📋 Boletins Salvos":
             "Nenhum boletim salvo."
         )
 
+
     else:
 
+
         st.dataframe(
+
             df,
+
             use_container_width=True,
+
             hide_index=True
+
         )
 
-        ids = df["id"].tolist()
+
+        ids = df[
+            "id"
+        ].tolist()
+
 
         bid = st.selectbox(
+
             "Selecione um boletim",
+
             ids
+
         )
 
+
         c1, c2, c3 = st.columns(3)
+
 
         if c1.button(
             "✏️ Abrir para lançamento"
@@ -2780,10 +2397,14 @@ elif page == "📋 Boletins Salvos":
                 bid
             )
 
-            st.success(
-                "Boletim selecionado. "
-                "Abra 'Novo Boletim' para continuar."
+            st.info(
+
+                "Abra o menu "
+                "'Novo Boletim' "
+                "para continuar."
+
             )
+
 
         c2.download_button(
 
@@ -2793,53 +2414,55 @@ elif page == "📋 Boletins Salvos":
                 int(bid)
             ),
 
-            file_name=(
+            file_name=
                 f"BOLETIM_DDH_{bid}.xlsx"
-            ),
 
-            mime=(
-                "application/"
-                "vnd.openxmlformats-officedocument."
-                "spreadsheetml.sheet"
-            )
         )
+
 
         if c3.button(
             "🗑️ Excluir boletim"
         ):
 
-            execute(
-                """
-                DELETE FROM manobras
-                WHERE boletim_id=?
-                """,
-                (int(bid),)
-            )
 
             execute(
+
                 """
+
+                DELETE FROM manobras
+                WHERE boletim_id=?
+
+                """,
+
+                (int(bid),)
+
+            )
+
+
+            execute(
+
+                """
+
                 DELETE FROM apontamentos
                 WHERE boletim_id=?
+
                 """,
+
                 (int(bid),)
+
             )
+
 
             delete(
                 "boletins",
                 bid
             )
 
-            if (
-                st.session_state.boletim_edit_id
-                ==
-                int(bid)
-            ):
-
-                st.session_state.boletim_edit_id = None
 
             st.success(
                 "Boletim excluído."
             )
+
 
             st.rerun()
 
@@ -2854,40 +2477,65 @@ elif page == "👷 Colaboradores":
         "👷 COLABORADORES"
     )
 
+
     t1, t2 = st.tabs(
+
         [
+
             "Lista",
+
             "Novo cadastro"
+
         ]
+
     )
+
 
     with t1:
 
+
         df = query(
+
             """
+
             SELECT *
             FROM colaboradores
+
             ORDER BY nome
+
             """
+
         )
 
+
         st.dataframe(
+
             df,
+
             use_container_width=True,
+
             hide_index=True
+
         )
+
 
         if not df.empty:
 
+
             idx = st.selectbox(
+
                 "Excluir colaborador",
+
                 df["id"].tolist(),
+
                 format_func=lambda x:
-                (
-                    f"{x} - "
-                    f"{df[df.id == x].iloc[0].nome}"
-                )
+
+                f"{x} - "
+
+                f"{df[df.id == x].iloc[0].nome}"
+
             )
+
 
             if st.button(
                 "🗑️ Excluir colaborador"
@@ -2900,51 +2548,85 @@ elif page == "👷 Colaboradores":
 
                 st.rerun()
 
+
     with t2:
 
+
         with st.form(
+
             "form_colab",
+
             clear_on_submit=True
+
         ):
+
 
             nome = st.text_input(
                 "Nome"
             )
 
+
             funcao = st.selectbox(
+
                 "Função",
+
                 [
+
                     "Supervisor",
+
                     "Sondador",
+
                     "Auxiliar de Sondador",
+
                     "Geólogo",
+
                     "Mecânico",
+
                     "Técnico de Segurança",
+
                     "Outro"
+
                 ]
+
             )
+
 
             matricula = st.text_input(
                 "Matrícula"
             )
 
+
             status = st.selectbox(
+
                 "Status",
+
                 [
+
                     "Ativo",
+
                     "Inativo"
+
                 ]
+
             )
 
+
             if st.form_submit_button(
+
                 "Cadastrar",
+
                 type="primary"
+
             ):
+
 
                 if nome.strip():
 
+
                     execute(
+
                         """
+
                         INSERT INTO colaboradores
                         (
                             nome,
@@ -2955,20 +2637,33 @@ elif page == "👷 Colaboradores":
 
                         VALUES
                         (
-                            ?,?,?,?
+                            ?,
+                            ?,
+                            ?,
+                            ?
                         )
+
                         """,
+
                         (
+
                             nome.strip(),
+
                             funcao,
+
                             matricula,
+
                             status
+
                         )
+
                     )
+
 
                     st.success(
                         "Colaborador cadastrado."
                     )
+
 
                     st.rerun()
 
@@ -2983,14 +2678,22 @@ elif page == "👥 Equipes":
         "👥 EQUIPES"
     )
 
+
     dfc = query(
+
         """
+
         SELECT *
         FROM colaboradores
+
         WHERE status='Ativo'
+
         ORDER BY nome
+
         """
+
     )
+
 
     if dfc.empty:
 
@@ -2998,76 +2701,127 @@ elif page == "👥 Equipes":
             "Cadastre colaboradores primeiro."
         )
 
+
     else:
 
-        opts = dfc["id"].tolist()
 
-        def fmt_colaborador(x):
+        opts = dfc[
+            "id"
+        ].tolist()
 
-            return dfc[
+
+        fmt = lambda x: (
+
+            dfc[
                 dfc.id == x
             ].iloc[0]["nome"]
 
+        )
+
+
         with st.form(
+
             "form_equipe",
+
             clear_on_submit=True
+
         ):
 
+
             c1, c2 = st.columns(2)
+
 
             codigo = c1.text_input(
                 "Código da equipe"
             )
 
+
             nome = c2.text_input(
                 "Nome da equipe"
             )
 
+
             supervisor = st.selectbox(
+
                 "Supervisor",
+
                 opts,
-                format_func=fmt_colaborador
+
+                format_func=fmt
+
             )
 
+
             sondador = st.selectbox(
+
                 "Sondador",
+
                 opts,
-                format_func=fmt_colaborador
+
+                format_func=fmt
+
             )
+
 
             a1, a2 = st.columns(2)
 
+
             aux1 = a1.selectbox(
+
                 "Auxiliar 1",
+
                 opts,
-                format_func=fmt_colaborador
+
+                format_func=fmt
+
             )
+
 
             aux2 = a2.selectbox(
+
                 "Auxiliar 2",
+
                 opts,
-                format_func=fmt_colaborador
+
+                format_func=fmt
+
             )
+
 
             status = st.selectbox(
+
                 "Status",
+
                 [
+
                     "Ativa",
+
                     "Inativa"
+
                 ]
+
             )
 
+
             if st.form_submit_button(
+
                 "Cadastrar equipe",
+
                 type="primary"
+
             ):
+
 
                 if codigo and nome:
 
+
                     try:
 
+
                         execute(
+
                             """
+
                             INSERT INTO equipes
                             (
                                 codigo,
@@ -3081,45 +2835,77 @@ elif page == "👥 Equipes":
 
                             VALUES
                             (
-                                ?,?,?,?,?,?,?
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?
                             )
+
                             """,
+
                             (
+
                                 codigo,
+
                                 nome,
+
                                 supervisor,
+
                                 sondador,
+
                                 aux1,
+
                                 aux2,
+
                                 status
+
                             )
+
                         )
+
 
                         st.success(
                             "Equipe cadastrada."
                         )
 
+
                         st.rerun()
 
+
                     except sqlite3.IntegrityError:
+
 
                         st.error(
                             "Código de equipe "
                             "já cadastrado."
                         )
 
+
         st.divider()
 
+
         st.dataframe(
+
             query(
+
                 """
+
                 SELECT *
                 FROM equipes
+
                 ORDER BY codigo
+
                 """
+
             ),
+
             use_container_width=True,
+
             hide_index=True
+
         )
 
 
@@ -3133,84 +2919,135 @@ elif page == "🔩 Sondas":
         "🔩 SONDAS"
     )
 
+
     dfe = query(
+
         """
+
         SELECT *
         FROM equipes
+
         WHERE status='Ativa'
+
         ORDER BY codigo
+
         """
+
     )
+
 
     if dfe.empty:
 
         st.warning(
-            "Cadastre uma equipe antes "
-            "de cadastrar uma sonda."
+
+            "Cadastre uma equipe "
+            "antes de cadastrar "
+            "uma sonda."
+
         )
+
 
     else:
 
-        opts = dfe["id"].tolist()
 
-        def fmt_equipe(x):
+        opts = dfe[
+            "id"
+        ].tolist()
 
-            return dfe[
+
+        fmt = lambda x: (
+
+            dfe[
                 dfe.id == x
             ].iloc[0]["codigo"]
 
+        )
+
+
         with st.form(
+
             "form_sonda",
+
             clear_on_submit=True
+
         ):
 
+
             c1, c2, c3 = st.columns(3)
+
 
             codigo = c1.text_input(
                 "Código"
             )
 
+
             modelo = c2.text_input(
                 "Modelo"
             )
+
 
             fabricante = c3.text_input(
                 "Fabricante"
             )
 
+
             c1, c2, c3 = st.columns(3)
+
 
             patrimonio = c1.text_input(
                 "Patrimônio"
             )
 
+
             equipe = c2.selectbox(
+
                 "Equipe vinculada",
+
                 opts,
-                format_func=fmt_equipe
+
+                format_func=fmt
+
             )
+
 
             status = c3.selectbox(
+
                 "Status",
+
                 [
+
                     "Operando",
+
                     "Parada",
+
                     "Manutenção",
+
                     "Inativa"
+
                 ]
+
             )
 
+
             if st.form_submit_button(
+
                 "Cadastrar sonda",
+
                 type="primary"
+
             ):
+
 
                 if codigo:
 
+
                     try:
 
+
                         execute(
+
                             """
+
                             INSERT INTO sondas
                             (
                                 codigo,
@@ -3223,44 +3060,74 @@ elif page == "🔩 Sondas":
 
                             VALUES
                             (
-                                ?,?,?,?,?,?
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?
                             )
+
                             """,
+
                             (
+
                                 codigo,
+
                                 modelo,
+
                                 fabricante,
+
                                 patrimonio,
+
                                 equipe,
+
                                 status
+
                             )
+
                         )
+
 
                         st.success(
                             "Sonda cadastrada."
                         )
 
+
                         st.rerun()
 
+
                     except sqlite3.IntegrityError:
+
 
                         st.error(
                             "Código de sonda "
                             "já cadastrado."
                         )
 
+
         st.divider()
 
+
         st.dataframe(
+
             query(
+
                 """
+
                 SELECT *
                 FROM sondas
+
                 ORDER BY codigo
+
                 """
+
             ),
+
             use_container_width=True,
+
             hide_index=True
+
         )
 
 
@@ -3274,86 +3141,126 @@ else:
         "⚙️ CADASTROS"
     )
 
+
     tab_f, tab_a = st.tabs(
+
         [
+
             "🎯 Furos",
+
             "⏱️ Códigos de atividades"
+
         ]
+
     )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # FUROS
-    # --------------------------------------------------------
+    # ========================================================
 
     with tab_f:
 
+
         with st.form(
+
             "form_furo",
+
             clear_on_submit=True
+
         ):
 
+
             c1, c2, c3 = st.columns(3)
+
 
             ident = c1.text_input(
                 "Identificação do furo"
             )
 
+
             projeto = c2.text_input(
                 "Projeto"
             )
+
 
             cliente = c3.text_input(
                 "Cliente"
             )
 
+
             c1, c2, c3 = st.columns(3)
+
 
             local = c1.text_input(
                 "Local"
             )
 
+
             e = c2.number_input(
                 "Coordenada E"
             )
+
 
             n = c3.number_input(
                 "Coordenada N"
             )
 
+
             c1, c2, c3 = st.columns(3)
+
 
             cota = c1.number_input(
                 "Cota"
             )
 
+
             az = c2.number_input(
                 "Azimute"
             )
+
 
             dip = c3.number_input(
                 "DIP"
             )
 
+
             status = st.selectbox(
+
                 "Status",
+
                 [
+
                     "Em andamento",
+
                     "Planejado",
+
                     "Concluído"
+
                 ]
+
             )
 
+
             if st.form_submit_button(
+
                 "Cadastrar furo",
+
                 type="primary"
+
             ):
+
 
                 if ident:
 
+
                     try:
 
+
                         execute(
+
                             """
+
                             INSERT INTO furos
                             (
                                 identificacao,
@@ -3370,96 +3277,164 @@ else:
 
                             VALUES
                             (
-                                ?,?,?,?,?,?,?,?,?,?
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?,
+                                ?
                             )
+
                             """,
+
                             (
+
                                 ident,
+
                                 projeto,
+
                                 cliente,
+
                                 local,
+
                                 e,
+
                                 n,
+
                                 cota,
+
                                 az,
+
                                 dip,
+
                                 status
+
                             )
+
                         )
+
 
                         st.success(
                             "Furo cadastrado."
                         )
 
+
                         st.rerun()
+
 
                     except sqlite3.IntegrityError:
 
+
                         st.error(
-                            "Identificação já cadastrada."
+                            "Identificação "
+                            "já cadastrada."
                         )
 
+
         st.dataframe(
+
             query(
+
                 """
+
                 SELECT *
                 FROM furos
+
                 ORDER BY identificacao
+
                 """
+
             ),
+
             use_container_width=True,
+
             hide_index=True
+
         )
 
-    # --------------------------------------------------------
+
+    # ========================================================
     # CÓDIGOS DE ATIVIDADES
-    # --------------------------------------------------------
+    # ========================================================
 
     with tab_a:
 
+
         st.caption(
+
             "Edite ou cadastre os códigos "
-            "para deixá-los exatamente iguais "
-            "aos códigos da sua planilha."
+            "para deixá-los exatamente "
+            "iguais aos códigos da sua planilha."
+
         )
+
 
         df = query(
+
             """
+
             SELECT *
             FROM atividades
+
             ORDER BY codigo
+
             """
+
         )
+
 
         st.dataframe(
+
             df,
+
             use_container_width=True,
+
             hide_index=True
+
         )
 
+
         with st.form(
+
             "form_atividade",
+
             clear_on_submit=True
+
         ):
+
 
             c1, c2, c3, c4 = st.columns(4)
 
+
             cod = c1.number_input(
+
                 "Código",
+
                 min_value=1,
+
                 step=1
+
             )
+
 
             grupo = c2.text_input(
                 "Grupo"
             )
 
+
             atividade = c3.text_input(
                 "Atividade"
             )
 
+
             classificacao = c4.selectbox(
+
                 "Classificação",
+
                 [
 
                     "OPERAÇÃO DIRETA",
@@ -3479,15 +3454,23 @@ else:
                     "SEGURANÇA"
 
                 ]
+
             )
 
+
             if st.form_submit_button(
+
                 "Salvar código",
+
                 type="primary"
+
             ):
 
+
                 execute(
+
                     """
+
                     INSERT INTO atividades
                     (
                         codigo,
@@ -3498,30 +3481,45 @@ else:
 
                     VALUES
                     (
-                        ?,?,?,?
+                        ?,
+                        ?,
+                        ?,
+                        ?
                     )
 
                     ON CONFLICT(codigo)
 
                     DO UPDATE SET
 
-                        grupo=excluded.grupo,
+                        grupo =
+                            excluded.grupo,
 
-                        atividade=excluded.atividade,
+                        atividade =
+                            excluded.atividade,
 
-                        classificacao=
-                        excluded.classificacao
+                        classificacao =
+                            excluded.classificacao
+
                     """,
+
                     (
+
                         int(cod),
+
                         grupo,
+
                         atividade,
+
                         classificacao
+
                     )
+
                 )
+
 
                 st.success(
                     "Código salvo."
                 )
+
 
                 st.rerun()
