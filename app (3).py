@@ -18,21 +18,16 @@ PAGES = [
 if "page" not in st.session_state:
     st.session_state.page = "🏠 Painel DDH"
 
-if "menu_page" not in st.session_state:
-    st.session_state.menu_page = st.session_state.page
 if "boletim_edit_id" not in st.session_state:
     st.session_state.boletim_edit_id = None
 
-# IMPORTANT: navigation changes are made by callbacks, before widgets render.
+# Callback seguro para trocar de página
 def abrir_boletim(bid):
     st.session_state.boletim_edit_id = int(bid)
     st.session_state.page = "📝 Novo Boletim"
-    st.session_state.menu_page = "📝 Novo Boletim"
-
 
 def ir_para_pagina(nome):
     st.session_state.page = nome
-    st.session_state.menu_page = nome
 
 # ------------------------------------------------------------
 # DATABASE
@@ -257,14 +252,17 @@ def excel_boletim(boletim_id):
 # ------------------------------------------------------------
 st.sidebar.title("⛏️ DDH CAMPO")
 
-def mudar_pagina_menu():
-    st.session_state.page = st.session_state.menu_page
+idx_pagina = PAGES.index(st.session_state.page) if st.session_state.page in PAGES else 0
+
+def ao_mudar_menu():
+    st.session_state.page = st.session_state.menu_opcao
 
 st.sidebar.radio(
     "Menu",
     PAGES,
-    key="menu_page",
-    on_change=mudar_pagina_menu
+    index=idx_pagina,
+    key="menu_opcao",
+    on_change=ao_mudar_menu
 )
 
 page = st.session_state.page
@@ -293,7 +291,6 @@ if page == "🏠 Painel DDH":
     cols[4].metric("📋 BOLETINS",nboletins)
 
     st.divider(); st.subheader("👥 Produção por Equipe")
-    # Aggregate manobras and apontamentos separately to avoid multiplication caused by joining both tables.
     equipes_df=query("""SELECT e.id equipe_id,e.codigo equipe,e.nome nome_equipe,
        COALESCE(m.metros,0) metros,COALESCE(m.recuperado,0) recuperado,
        COALESCE(h.horas_operacao,0) horas_operacao
@@ -383,8 +380,8 @@ elif page == "📝 Novo Boletim":
         if h_fim<h_ini: st.error("Horímetro final não pode ser menor que o inicial.")
         else:
             bid=execute("""INSERT INTO boletins(data,turno,projeto,cliente,sonda_id,equipe_id,furo_id,
-                         horimetro_inicial,horimetro_final,observacoes,criado_em)
-                         VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+                                         horimetro_inicial,horimetro_final,observacoes,criado_em)
+                                         VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                         (str(data_b),turno,projeto,cliente,int(sonda_id),int(equipe_id),int(furo_id),
                          h_ini,h_fim,observacoes,datetime.now().isoformat()))
             abrir_boletim(bid)
@@ -464,7 +461,6 @@ elif page == "📋 Boletins Salvos":
         st.dataframe(df,use_container_width=True,hide_index=True)
         bid=st.selectbox("Selecione um boletim",df["id"].tolist(),format_func=lambda x:f"Boletim #{x}")
         c1,c2,c3=st.columns(3)
-        # Callback fixes StreamlitAPIException: no session_state mutation after radio was created.
         c1.button("✏️ Abrir para lançamento",on_click=abrir_boletim,args=(int(bid),),use_container_width=True)
         c2.download_button("📥 Baixar Excel",data=excel_boletim(int(bid)),file_name=f"BOLETIM_DDH_{bid}.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",use_container_width=True)
@@ -580,14 +576,21 @@ elif page == "⚙️ Cadastros":
         st.caption("Cadastre ou atualize os códigos de atividades.")
         df=query("SELECT * FROM atividades ORDER BY codigo"); st.dataframe(df,use_container_width=True,hide_index=True)
         with st.form("form_atividade",clear_on_submit=True):
-            c1,c2,c3,c4=st.columns(4); cod=c1.number_input("Código",min_value=1,step=1)
-            grupo=c2.text_input("Grupo"); atividade=c3.text_input("Atividade")
-            classificacao=c4.selectbox("Classificação",["OPERAÇÃO DIRETA","APOIO OPERACIONAL","MANUTENÇÃO PREVENTIVA","MECÂNICA CORRETIVA","PARADA EXTERNA","INTERVENÇÃO NO FURO","ADMINISTRATIVO","SEGURANÇA"])
-            salvar=st.form_submit_button("Salvar código",type="primary")
-        if salvar:
+            c1,c2,c3,c4=st.columns(4)
+            cod=c1.number_input("Código",min_value=1,step=1,key="cad_cod_act")
+            grupo=c2.text_input("Grupo",key="cad_grupo_act")
+            atividade=c3.text_input("Atividade",key="cad_nome_act")
+            classificacao=c4.selectbox("Classificação",
+                ["OPERAÇÃO DIRETA","APOIO OPERACIONAL","MANUTENÇÃO PREVENTIVA","MECÂNICA CORRETIVA","PARADA EXTERNA","INTERVENÇÃO NO FURO","SEGURANÇA","ADMINISTRATIVO"],
+                key="cad_class_act"
+            )
+            salvar_act=st.form_submit_button("Salvar Atividade",type="primary")
+        if salvar_act:
             if grupo.strip() and atividade.strip():
-                execute("""INSERT INTO atividades(codigo,grupo,atividade,classificacao) VALUES(?,?,?,?)
-                           ON CONFLICT(codigo) DO UPDATE SET grupo=excluded.grupo,atividade=excluded.atividade,classificacao=excluded.classificacao""",
-                        (int(cod),grupo,atividade,classificacao))
-                st.success("Código salvo."); st.rerun()
-            else: st.error("Informe Grupo e Atividade.")
+                execute("""INSERT INTO atividades(codigo,grupo,atividade,classificacao)
+                           VALUES(?,?,?,?)
+                           ON CONFLICT(codigo) DO UPDATE SET grupo=excluded.grupo, atividade=excluded.atividade, classificacao=excluded.classificacao""",
+                        (int(cod),grupo.strip(),atividade.strip(),classificacao))
+                st.success("Atividade cadastrada/atualizada com sucesso."); st.rerun()
+            else:
+                st.error("Preencha todos os campos da atividade.")
