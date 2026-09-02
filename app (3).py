@@ -17,6 +17,9 @@ PAGES = [
 # ------------------------------------------------------------
 if "page" not in st.session_state:
     st.session_state.page = "🏠 Painel DDH"
+
+if "menu_page" not in st.session_state:
+    st.session_state.menu_page = st.session_state.page
 if "boletim_edit_id" not in st.session_state:
     st.session_state.boletim_edit_id = None
 
@@ -24,9 +27,12 @@ if "boletim_edit_id" not in st.session_state:
 def abrir_boletim(bid):
     st.session_state.boletim_edit_id = int(bid)
     st.session_state.page = "📝 Novo Boletim"
+    st.session_state.menu_page = "📝 Novo Boletim"
+
 
 def ir_para_pagina(nome):
     st.session_state.page = nome
+    st.session_state.menu_page = nome
 
 # ------------------------------------------------------------
 # DATABASE
@@ -250,7 +256,18 @@ def excel_boletim(boletim_id):
 # SIDEBAR
 # ------------------------------------------------------------
 st.sidebar.title("⛏️ DDH CAMPO")
-page = st.sidebar.radio("Menu", PAGES, key="page")
+
+def mudar_pagina_menu():
+    st.session_state.page = st.session_state.menu_page
+
+st.sidebar.radio(
+    "Menu",
+    PAGES,
+    key="menu_page",
+    on_change=mudar_pagina_menu
+)
+
+page = st.session_state.page
 
 # ------------------------------------------------------------
 # DASHBOARD
