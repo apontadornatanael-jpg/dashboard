@@ -29,7 +29,7 @@ st.markdown("""
 <style>
 
 /* =====================================================
-   CABEÇALHO - NECESSÁRIO PARA O MENU LATERAL
+   CABEÇALHO DO STREAMLIT - MANTER VISÍVEL
    ===================================================== */
 
 header[data-testid="stHeader"] {
@@ -41,7 +41,7 @@ header[data-testid="stHeader"] {
     z-index: 999999 !important;
 }
 
-/* BOTÃO DE ABRIR A BARRA LATERAL */
+/* Botão de abrir a barra lateral */
 [data-testid="stSidebarCollapsedControl"] {
     display: flex !important;
     visibility: visible !important;
@@ -52,29 +52,12 @@ header[data-testid="stHeader"] {
     z-index: 9999999 !important;
 }
 
-/* =====================================================
-   ESCONDER BOTÕES DO STREAMLIT
-   ===================================================== */
-
-/* Share */
-[data-testid="stAppDeployButton"] {
-    display: none !important;
-}
-
-/* Share + estrela + lápis + GitHub */
-[data-testid="stToolbar"] {
-    display: none !important;
-}
-
-/* Menu padrão */
+/* Remove apenas o menu principal */
 #MainMenu {
     display: none !important;
 }
 
-/* =====================================================
-   CONTEÚDO
-   ===================================================== */
-
+/* Ajuste do conteúdo */
 .block-container {
     padding-top: 1rem;
 }
