@@ -550,47 +550,344 @@ elif page == "🔩 Sondas":
         st.divider()
         st.dataframe(query("""SELECT s.*,e.codigo equipe FROM sondas s LEFT JOIN equipes e ON e.id=s.equipe_id ORDER BY s.codigo"""),
                      use_container_width=True,hide_index=True)
-
 # ------------------------------------------------------------
-# REGISTRATIONS
+# REGISTRATIONS / CADASTROS
 # ------------------------------------------------------------
 elif page == "⚙️ Cadastros":
-    st.title("⚙️ CADASTROS"); tab_f,tab_a=st.tabs(["🎯 Furos","⏱️ Códigos de atividades"])
-    with tab_f:
-        with st.form("form_furo",clear_on_submit=True):
-            c1,c2,c3=st.columns(3); ident=c1.text_input("Identificação do furo"); projeto=c2.text_input("Projeto"); cliente=c3.text_input("Cliente")
-            c1,c2,c3=st.columns(3); local=c1.text_input("Local"); e=c2.number_input("Coordenada E"); n=c3.number_input("Coordenada N")
-            c1,c2,c3=st.columns(3); cota=c1.number_input("Cota"); az=c2.number_input("Azimute"); dip=c3.number_input("DIP")
-            status=st.selectbox("Status",["Em andamento","Planejado","Concluído"]); salvar=st.form_submit_button("Cadastrar furo",type="primary")
-        if salvar:
-            if ident.strip():
-                try:
-                    execute("""INSERT INTO furos(identificacao,projeto,cliente,local,coord_e,coord_n,cota,azimute,dip,status)
-                               VALUES(?,?,?,?,?,?,?,?,?,?)""",(ident.strip(),projeto,cliente,local,e,n,cota,az,dip,status))
-                    st.success("Furo cadastrado."); st.rerun()
-                except sqlite3.IntegrityError: st.error("Identificação já cadastrada.")
-            else: st.error("Informe a identificação.")
-        st.divider(); st.dataframe(query("SELECT * FROM furos ORDER BY identificacao"),use_container_width=True,hide_index=True)
 
+    st.title("⚙️ CADASTROS")
+
+    tab_f, tab_a = st.tabs([
+        "🎯 Furos",
+        "⏱️ Códigos de atividades"
+    ])
+
+    # ==========================================================
+    # FUROS
+    # ==========================================================
+    with tab_f:
+
+        st.subheader("🎯 Cadastro de Furo")
+
+        # ------------------------------------------------------
+        # FORMULÁRIO DE CADASTRO
+        # ------------------------------------------------------
+        with st.form("form_furo", clear_on_submit=True):
+
+            c1, c2, c3 = st.columns(3)
+
+            ident = c1.text_input("Identificação do furo")
+            projeto = c2.text_input("Projeto")
+            cliente = c3.text_input("Cliente")
+
+            c1, c2, c3 = st.columns(3)
+
+            local = c1.text_input("Local")
+            e = c2.number_input("Coordenada E")
+            n = c3.number_input("Coordenada N")
+
+            c1, c2, c3 = st.columns(3)
+
+            cota = c1.number_input("Cota")
+            az = c2.number_input("Azimute")
+            dip = c3.number_input("DIP")
+
+            status = st.selectbox(
+                "Status",
+                [
+                    "Em andamento",
+                    "Planejado",
+                    "Concluído"
+                ]
+            )
+
+            salvar = st.form_submit_button(
+                "💾 Cadastrar furo",
+                type="primary"
+            )
+
+        # ------------------------------------------------------
+        # SALVAR FURO
+        # ------------------------------------------------------
+        if salvar:
+
+            if ident.strip():
+
+                try:
+
+                    execute(
+                        """
+                        INSERT INTO furos(
+                            identificacao,
+                            projeto,
+                            cliente,
+                            local,
+                            coord_e,
+                            coord_n,
+                            cota,
+                            azimute,
+                            dip,
+                            status
+                        )
+                        VALUES(?,?,?,?,?,?,?,?,?,?)
+                        """,
+                        (
+                            ident.strip(),
+                            projeto,
+                            cliente,
+                            local,
+                            e,
+                            n,
+                            cota,
+                            az,
+                            dip,
+                            status
+                        )
+                    )
+
+                    st.success("✅ Furo cadastrado com sucesso!")
+
+                    st.rerun()
+
+                except sqlite3.IntegrityError:
+
+                    st.error(
+                        "❌ Esta identificação de furo já está cadastrada."
+                    )
+
+            else:
+
+                st.error(
+                    "⚠️ Informe a identificação do furo."
+                )
+
+        # ------------------------------------------------------
+        # LISTA DE FUROS
+        # ------------------------------------------------------
+        st.divider()
+
+        st.subheader("📋 Furos cadastrados")
+
+        df_furos = query(
+            "SELECT * FROM furos ORDER BY identificacao"
+        )
+
+        if df_furos.empty:
+
+            st.info("Nenhum furo cadastrado.")
+
+        else:
+
+            st.dataframe(
+                df_furos,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # --------------------------------------------------
+            # EXCLUIR FURO
+            # --------------------------------------------------
+            st.divider()
+
+            st.subheader("🗑️ Excluir Furo")
+
+            furo_id_excluir = st.selectbox(
+                "Selecione o furo que deseja excluir",
+                df_furos["id"].tolist(),
+                format_func=lambda x: (
+                    f"{df_furos[df_furos['id'] == x].iloc[0]['identificacao']}"
+                ),
+                key="selecionar_furo_excluir"
+            )
+
+            furo_selecionado = df_furos[
+                df_furos["id"] == furo_id_excluir
+            ].iloc[0]
+
+            st.warning(
+                f"⚠️ Você está prestes a excluir o furo: "
+                f"**{furo_selecionado['identificacao']}**"
+            )
+
+            confirmar_exclusao = st.checkbox(
+                "Confirmo que desejo excluir este furo",
+                key="confirmar_exclusao_furo"
+            )
+
+            if st.button(
+                "🗑️ EXCLUIR FURO",
+                type="secondary",
+                use_container_width=True
+            ):
+
+                if not confirmar_exclusao:
+
+                    st.error(
+                        "⚠️ Marque a confirmação antes de excluir o furo."
+                    )
+
+                else:
+
+                    # ------------------------------------------
+                    # VERIFICA SE EXISTEM BOLETINS NO FURO
+                    # ------------------------------------------
+                    boletins_furo = query(
+                        """
+                        SELECT COUNT(*) AS total
+                        FROM boletins
+                        WHERE furo_id=?
+                        """,
+                        (int(furo_id_excluir),)
+                    )
+
+                    total_boletins = int(
+                        boletins_furo.iloc[0]["total"]
+                    )
+
+                    # ------------------------------------------
+                    # BLOQUEIA EXCLUSÃO SE EXISTIREM BOLETINS
+                    # ------------------------------------------
+                    if total_boletins > 0:
+
+                        st.error(
+                            f"❌ Não é possível excluir este furo porque "
+                            f"existem {total_boletins} boletim(ns) "
+                            f"vinculado(s) a ele."
+                        )
+
+                        st.info(
+                            "💡 Exclua primeiro os boletins vinculados "
+                            "a este furo."
+                        )
+
+                    else:
+
+                        delete(
+                            "furos",
+                            furo_id_excluir
+                        )
+
+                        st.success(
+                            f"✅ Furo "
+                            f"{furo_selecionado['identificacao']} "
+                            f"excluído com sucesso!"
+                        )
+
+                        st.rerun()
+
+    # ==========================================================
+    # CÓDIGOS DE ATIVIDADES
+    # ==========================================================
     with tab_a:
-        st.caption("Cadastre ou atualize os códigos de atividades.")
-        df=query("SELECT * FROM atividades ORDER BY codigo"); st.dataframe(df,use_container_width=True,hide_index=True)
-        with st.form("form_atividade",clear_on_submit=True):
-            c1,c2,c3,c4=st.columns(4)
-            cod=c1.number_input("Código",min_value=1,step=1,key="cad_cod_act")
-            grupo=c2.text_input("Grupo",key="cad_grupo_act")
-            atividade=c3.text_input("Atividade",key="cad_nome_act")
-            classificacao=c4.selectbox("Classificação",
-                ["OPERAÇÃO DIRETA","APOIO OPERACIONAL","MANUTENÇÃO PREVENTIVA","MECÂNICA CORRETIVA","PARADA EXTERNA","INTERVENÇÃO NO FURO","SEGURANÇA","ADMINISTRATIVO"],
+
+        st.caption(
+            "Cadastre ou atualize os códigos de atividades."
+        )
+
+        # ------------------------------------------------------
+        # LISTA DE ATIVIDADES
+        # ------------------------------------------------------
+        df = query(
+            "SELECT * FROM atividades ORDER BY codigo"
+        )
+
+        st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.divider()
+
+        st.subheader("➕ Cadastrar / Atualizar Atividade")
+
+        # ------------------------------------------------------
+        # FORMULÁRIO DE ATIVIDADE
+        # ------------------------------------------------------
+        with st.form(
+            "form_atividade",
+            clear_on_submit=True
+        ):
+
+            c1, c2, c3, c4 = st.columns(4)
+
+            cod = c1.number_input(
+                "Código",
+                min_value=1,
+                step=1,
+                key="cad_cod_act"
+            )
+
+            grupo = c2.text_input(
+                "Grupo",
+                key="cad_grupo_act"
+            )
+
+            atividade = c3.text_input(
+                "Atividade",
+                key="cad_nome_act"
+            )
+
+            classificacao = c4.selectbox(
+                "Classificação",
+                [
+                    "OPERAÇÃO DIRETA",
+                    "APOIO OPERACIONAL",
+                    "MANUTENÇÃO PREVENTIVA",
+                    "MECÂNICA CORRETIVA",
+                    "PARADA EXTERNA",
+                    "INTERVENÇÃO NO FURO",
+                    "SEGURANÇA",
+                    "ADMINISTRATIVO"
+                ],
                 key="cad_class_act"
             )
-            salvar_act=st.form_submit_button("Salvar Atividade",type="primary")
+
+            salvar_act = st.form_submit_button(
+                "💾 Salvar Atividade",
+                type="primary"
+            )
+
+        # ------------------------------------------------------
+        # SALVAR / ATUALIZAR ATIVIDADE
+        # ------------------------------------------------------
         if salvar_act:
+
             if grupo.strip() and atividade.strip():
-                execute("""INSERT INTO atividades(codigo,grupo,atividade,classificacao)
-                           VALUES(?,?,?,?)
-                           ON CONFLICT(codigo) DO UPDATE SET grupo=excluded.grupo, atividade=excluded.atividade, classificacao=excluded.classificacao""",
-                        (int(cod),grupo.strip(),atividade.strip(),classificacao))
-                st.success("Atividade cadastrada/atualizada com sucesso."); st.rerun()
+
+                execute(
+                    """
+                    INSERT INTO atividades(
+                        codigo,
+                        grupo,
+                        atividade,
+                        classificacao
+                    )
+                    VALUES(?,?,?,?)
+
+                    ON CONFLICT(codigo)
+                    DO UPDATE SET
+
+                        grupo=excluded.grupo,
+                        atividade=excluded.atividade,
+                        classificacao=excluded.classificacao
+                    """,
+                    (
+                        int(cod),
+                        grupo.strip(),
+                        atividade.strip(),
+                        classificacao
+                    )
+                )
+
+                st.success(
+                    "✅ Atividade cadastrada/atualizada com sucesso."
+                )
+
+                st.rerun()
+
             else:
-                st.error("Preencha todos os campos da atividade.")
+
+                st.error(
+                    "⚠️ Preencha todos os campos da atividade."
+                )
