@@ -28,40 +28,38 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* Mantém o cabeçalho visível para o botão do menu */
-[data-testid="stHeader"] {
+/* =====================================================
+   CABEÇALHO DO STREAMLIT - MANTER VISÍVEL
+   ===================================================== */
+
+header[data-testid="stHeader"] {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
+    height: 3rem !important;
     background: transparent !important;
+    z-index: 999999 !important;
 }
 
-/* Mantém o botão de abrir a barra lateral sempre visível */
+/* Botão de abrir a barra lateral */
 [data-testid="stSidebarCollapsedControl"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
-    z-index: 999999 !important;
+    position: fixed !important;
+    top: 0.5rem !important;
+    left: 0.5rem !important;
+    z-index: 9999999 !important;
 }
 
-/* Esconde somente a toolbar do Streamlit */
-[data-testid="stToolbar"] {
-    display: none !important;
-}
-
-/* Esconde Share */
-[data-testid="stAppDeployButton"] {
-    display: none !important;
-}
-
-/* Esconde menu principal */
+/* Remove apenas o menu principal */
 #MainMenu {
     display: none !important;
 }
 
-/* Esconde status */
-[data-testid="stStatusWidget"] {
-    display: none !important;
+/* Ajuste do conteúdo */
+.block-container {
+    padding-top: 1rem;
 }
 
 </style>
