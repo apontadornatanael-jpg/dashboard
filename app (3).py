@@ -118,6 +118,8 @@ PAGES_SUPERVISOR = [
 PAGES_CAMPO = [
     "📝 Novo Boletim",
     "📋 Boletins Salvos",
+    "🕳️ Cadastro de Furos",
+    "📖 Consultar Atividades",
 ]
 
 # ============================================================
@@ -1839,6 +1841,88 @@ elif page == "⚙️ Cadastros":
                 st.rerun()
             else:
                 st.error("Preencha todos os campos da atividade.")
+
+# ============================================================
+# CADASTRO DE FUROS - PERFIL CAMPO
+# ============================================================
+elif page == "🕳️ Cadastro de Furos":
+    st.title("🕳️ CADASTRO DE FUROS")
+    st.caption("Cadastre um novo furo para disponibilizá-lo no preenchimento dos boletins.")
+
+    with st.form("form_furo_campo", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        ident = c1.text_input("Identificação do furo")
+        projeto = c2.text_input("Projeto")
+        cliente = c3.text_input("Cliente")
+
+        c1, c2, c3 = st.columns(3)
+        local = c1.text_input("Local")
+        e = c2.number_input("Coordenada E")
+        n = c3.number_input("Coordenada N")
+
+        c1, c2, c3 = st.columns(3)
+        cota = c1.number_input("Cota")
+        az = c2.number_input("Azimute")
+        dip = c3.number_input("DIP")
+
+        status = st.selectbox(
+            "Status", ["Em andamento", "Planejado", "Concluído"]
+        )
+        salvar = st.form_submit_button("💾 Cadastrar furo", type="primary")
+
+    if salvar:
+        if ident.strip():
+            try:
+                execute("""
+                    INSERT INTO furos(
+                        identificacao,projeto,cliente,local,
+                        coord_e,coord_n,cota,azimute,dip,status
+                    )
+                    VALUES(?,?,?,?,?,?,?,?,?,?)
+                """, (
+                    ident.strip(), projeto, cliente, local,
+                    e, n, cota, az, dip, status
+                ))
+                st.success("Furo cadastrado com sucesso! Ele já pode ser selecionado no Novo Boletim.")
+                st.rerun()
+            except sqlite3.IntegrityError:
+                st.error("Esta identificação de furo já está cadastrada.")
+        else:
+            st.error("Informe a identificação do furo.")
+
+    st.divider()
+    st.subheader("📋 Furos cadastrados")
+    df_furos = query("SELECT * FROM furos ORDER BY identificacao")
+    if df_furos.empty:
+        st.info("Nenhum furo cadastrado.")
+    else:
+        st.dataframe(df_furos, use_container_width=True, hide_index=True)
+
+# ============================================================
+# CONSULTA DE ATIVIDADES - PERFIL CAMPO
+# ============================================================
+elif page == "📖 Consultar Atividades":
+    st.title("📖 CONSULTAR CÓDIGOS DE ATIVIDADES")
+    st.caption("Consulta somente. Use esta tela para conferir o código, a atividade e a classificação antes de fazer um lançamento no boletim.")
+
+    busca = st.text_input("🔎 Pesquisar por código, grupo, atividade ou classificação")
+    df_atividades = query("SELECT codigo, grupo, atividade, classificacao FROM atividades ORDER BY codigo")
+
+    if df_atividades.empty:
+        st.info("Nenhum código de atividade cadastrado.")
+    else:
+        if busca.strip():
+            termo = busca.strip().lower()
+            mascara = (
+                df_atividades["codigo"].astype(str).str.lower().str.contains(termo, na=False)
+                | df_atividades["grupo"].fillna("").astype(str).str.lower().str.contains(termo, na=False)
+                | df_atividades["atividade"].fillna("").astype(str).str.lower().str.contains(termo, na=False)
+                | df_atividades["classificacao"].fillna("").astype(str).str.lower().str.contains(termo, na=False)
+            )
+            df_atividades = df_atividades[mascara]
+
+        st.dataframe(df_atividades, use_container_width=True, hide_index=True)
+        st.caption(f"{len(df_atividades)} atividade(s) encontrada(s).")
 
 # ============================================================
 # GERENCIAMENTO
