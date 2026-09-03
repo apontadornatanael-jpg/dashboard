@@ -52,19 +52,25 @@ header[data-testid="stHeader"] {
     z-index: 9999999 !important;
 }
 
-/* Remove apenas o menu principal */
-#MainMenu {
+/* =====================================================
+   ESCONDE BOTÕES DO CANTO SUPERIOR DIREITO
+   SEM ESCONDER O CONTROLE DA BARRA LATERAL
+   ===================================================== */
+
+/* Share */
+[data-testid="stAppDeployButton"] {
     display: none !important;
 }
 
-/* Ajuste do conteúdo */
-.block-container {
-    padding-top: 1rem;
+/* Barra de ferramentas */
+[data-testid="stToolbar"] {
+    display: none !important;
 }
 
-</style>
-""", unsafe_allow_html=True)
-
+/* Menu padrão */
+#MainMenu {
+    display: none !important;
+}
 # ============================================================
 # SESSION STATE
 # ============================================================
