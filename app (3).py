@@ -6,12 +6,16 @@ import hashlib
 from datetime import date, datetime, time, timedelta
 from io import BytesIO
 from pathlib import Path
+import tempfile
+import os
 
 # ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 BASE_DIR = Path(__file__).resolve().parent
 DB = str(BASE_DIR / "ddh.db")
+BACKUP_DIR = BASE_DIR / "backups"
+BACKUP_DIR.mkdir(exist_ok=True)
 LOGO_PATH = BASE_DIR / "logo_ddh.png"
 
 st.set_page_config(
@@ -49,6 +53,7 @@ PAGES_ADMIN = [
     "⚙️ Cadastros",
     "🛠️ Gerenciamento",
     "👤 Usuários",
+    "💾 Backup",
 ]
 
 PAGES_SUPERVISOR = [
@@ -83,6 +88,83 @@ def conn():
     c.execute("PRAGMA foreign_keys = ON")
     return c
 
+# ============================================================
+# BACKUP DO BANCO SQLITE
+# ============================================================
+def criar_backup(prefixo="backup"):
+    """Cria um backup consistente do SQLite usando a API nativa de backup."""
+    if not Path(DB).exists():
+        return None
+    agora = datetime.now().strftime("%Y%m%d_%H%M%S")
+    destino = BACKUP_DIR / f"{prefixo}_ddh_{agora}.db"
+    origem = sqlite3.connect(DB, timeout=30)
+    destino_conn = sqlite3.connect(str(destino))
+    try:
+        origem.backup(destino_conn)
+        destino_conn.commit()
+    finally:
+        destino_conn.close()
+        origem.close()
+
+    # Mantém os 30 backups automáticos mais recentes.
+    if prefixo == "auto":
+        antigos = sorted(BACKUP_DIR.glob("auto_ddh_*.db"), key=lambda x: x.stat().st_mtime, reverse=True)
+        for arq in antigos[30:]:
+            try:
+                arq.unlink()
+            except OSError:
+                pass
+    return destino
+
+def backup_automatico():
+    """Evita criar vários backups automáticos no mesmo intervalo de 15 minutos."""
+    if not Path(DB).exists():
+        return None
+    marcador = BACKUP_DIR / "ultimo_backup_auto.txt"
+    agora = datetime.now()
+    try:
+        if marcador.exists():
+            ultima = datetime.fromisoformat(marcador.read_text(encoding="utf-8").strip())
+            if (agora - ultima).total_seconds() < 900:
+                return None
+    except Exception:
+        pass
+    destino = criar_backup("auto")
+    if destino:
+        marcador.write_text(agora.isoformat(), encoding="utf-8")
+    return destino
+
+def bytes_backup_atual():
+    """Gera uma cópia consistente do banco para download."""
+    if not Path(DB).exists():
+        return b""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        origem = sqlite3.connect(DB, timeout=30)
+        destino = sqlite3.connect(tmp_path)
+        try:
+            origem.backup(destino)
+            destino.commit()
+        finally:
+            destino.close()
+            origem.close()
+        return Path(tmp_path).read_bytes()
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+def validar_backup_sqlite(caminho):
+    teste = sqlite3.connect(str(caminho))
+    try:
+        teste.execute("PRAGMA schema_version").fetchone()
+        teste.execute("PRAGMA integrity_check").fetchone()
+        return True
+    finally:
+        teste.close()
+
 def query(sql, params=()):
     c = conn()
     try:
@@ -91,6 +173,8 @@ def query(sql, params=()):
         c.close()
 
 def execute(sql, params=()):
+    # Proteção: cria backup automático antes da primeira alteração do período.
+    backup_automatico()
     c = conn()
     try:
         cur = c.cursor()
@@ -1989,6 +2073,93 @@ elif page == "🛠️ Gerenciamento":
                 if st.button("📝 Abrir Boletim", type="primary"):
                     abrir_boletim(int(boletim_id))
                     st.rerun()
+
+# ============================================================
+# BACKUP
+# ============================================================
+elif page == "💾 Backup":
+    st.title("💾 BACKUP E SEGURANÇA DO BANCO")
+    st.caption("Faça cópias do banco DDH e mantenha uma cópia segura fora do servidor.")
+
+    if nivel != "Administrador":
+        st.error("Apenas administradores podem acessar o backup do banco.")
+        st.stop()
+
+    if Path(DB).exists():
+        tamanho = Path(DB).stat().st_size / 1024
+        st.metric("Banco atual", f"{tamanho:.1f} KB")
+    else:
+        st.warning("O banco ddh.db ainda não foi encontrado.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("💾 Criar backup agora", type="primary", use_container_width=True):
+            arq = criar_backup("manual")
+            if arq:
+                st.success(f"Backup criado: {arq.name}")
+            else:
+                st.error("Não foi possível criar o backup porque o banco não foi encontrado.")
+    with c2:
+        dados = bytes_backup_atual()
+        st.download_button(
+            "📥 Baixar cópia atual do banco",
+            data=dados,
+            file_name=f"ddh_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
+            mime="application/octet-stream",
+            use_container_width=True,
+            disabled=not bool(dados)
+        )
+
+    st.divider()
+    st.subheader("📚 Backups disponíveis no servidor")
+    backups = sorted(
+        [x for x in BACKUP_DIR.glob("*.db")],
+        key=lambda x: x.stat().st_mtime,
+        reverse=True
+    )
+
+    if backups:
+        tabela = pd.DataFrame([{
+            "Arquivo": x.name,
+            "Data": datetime.fromtimestamp(x.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S"),
+            "Tamanho (KB)": round(x.stat().st_size / 1024, 1)
+        } for x in backups])
+        st.dataframe(tabela, use_container_width=True, hide_index=True)
+
+        escolhido = st.selectbox("Selecionar backup para baixar", [x.name for x in backups])
+        arq_escolhido = BACKUP_DIR / escolhido
+        st.download_button(
+            "📥 Baixar backup selecionado",
+            data=arq_escolhido.read_bytes(),
+            file_name=arq_escolhido.name,
+            mime="application/octet-stream"
+        )
+    else:
+        st.info("Nenhum backup criado ainda.")
+
+    st.divider()
+    st.subheader("♻️ Restaurar backup")
+    st.warning("A restauração substitui o banco atual. Antes de restaurar, o sistema cria uma cópia de segurança do banco atual.")
+    upload = st.file_uploader("Enviar arquivo de backup .db", type=["db"], key="restore_db_upload")
+    confirmar = st.checkbox("Confirmo que desejo substituir o banco atual", key="confirmar_restore")
+    if st.button("♻️ Restaurar backup enviado", type="secondary", disabled=not(upload and confirmar)):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            tmp.write(upload.getvalue())
+            tmp_path = Path(tmp.name)
+        try:
+            validar_backup_sqlite(tmp_path)
+            criar_backup("antes_restauracao")
+            os.replace(str(tmp_path), DB)
+            st.success("Backup restaurado com sucesso. O aplicativo será reiniciado.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Não foi possível restaurar o backup: {e}")
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
 
 # ============================================================
 # USUÁRIOS
