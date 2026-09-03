@@ -1,13 +1,31 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
+import hashlib
+import secrets
 from datetime import date, datetime, time, timedelta
 from io import BytesIO
 
 st.set_page_config(page_title="DDH Campo", page_icon="⛏️", layout="wide")
 DB = "ddh.db"
+# ------------------------------------------------------------
+# SESSION LOGIN
+# ------------------------------------------------------------
+if "logado" not in st.session_state:
+    st.session_state.logado = False
 
-PAGES = [
+if "usuario_id" not in st.session_state:
+    st.session_state.usuario_id = None
+
+if "usuario_nome" not in st.session_state:
+    st.session_state.usuario_nome = None
+
+if "usuario_login" not in st.session_state:
+    st.session_state.usuario_login = None
+
+if "usuario_nivel" not in st.session_state:
+    st.session_state.usuario_nivel = None
+PAGES_ADMIN = [
     "🏠 Painel DDH",
     "📝 Novo Boletim",
     "📋 Boletins Salvos",
@@ -15,7 +33,13 @@ PAGES = [
     "👥 Equipes",
     "🔩 Sondas",
     "⚙️ Cadastros",
-    "🛠️ Gerenciamento"
+    "🛠️ Gerenciamento",
+    "👤 Usuários"
+]
+
+PAGES_CAMPO = [
+    "📝 Novo Boletim",
+    "📋 Boletins Salvos"
 ]
 
 # ------------------------------------------------------------
@@ -34,7 +58,19 @@ def abrir_boletim(bid):
 
 def ir_para_pagina(nome):
     st.session_state.page = nome
+    
+# ------------------------------------------------------------
+# SENHAS
+# ------------------------------------------------------------
+def hash_senha(senha):
+    return hashlib.sha256(
+        senha.encode("utf-8")
+    ).hexdigest()
 
+
+def verificar_senha(senha, senha_hash):
+    return hash_senha(senha) == senha_hash
+    
 # ------------------------------------------------------------
 # DATABASE
 # ------------------------------------------------------------
@@ -165,6 +201,19 @@ def seed_activities():
         c.close()
 
 init_db()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            usuario TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL,
+            nivel TEXT NOT NULL,
+            equipe_id INTEGER,
+            status TEXT DEFAULT 'Ativo',
+            criado_em TEXT
+        )
+    """)
 
 # ------------------------------------------------------------
 # HELPERS
