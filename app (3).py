@@ -28,10 +28,7 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* =====================================================
-   CABEÇALHO DO STREAMLIT
-   Mantém ativo para permitir reabrir a barra lateral
-   ===================================================== */
+/* Mantém o cabeçalho do Streamlit ativo para o menu lateral */
 header[data-testid="stHeader"] {
     display: block !important;
     visibility: visible !important;
@@ -40,63 +37,38 @@ header[data-testid="stHeader"] {
     z-index: 999999 !important;
 }
 
-/* =====================================================
-   BOTÃO DE REABRIR A BARRA LATERAL
-   NÃO ESCONDER
-   ===================================================== */
-[data-testid="stSidebarCollapsedControl"] {
+/* Mantém SEMPRE visível o controle para reabrir a barra lateral */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
-    position: fixed !important;
-    top: 0.5rem !important;
-    left: 0.5rem !important;
     z-index: 9999999 !important;
 }
 
-/* =====================================================
-   ESCONDER APENAS OS BOTÕES DO CANTO SUPERIOR DIREITO
-   IMPORTANTE: NÃO esconder a stToolbar inteira, pois ela
-   pode conter o controle de reabrir a barra lateral.
-   ===================================================== */
+/* Esconde somente os botões extras do canto superior direito */
+[data-testid="stToolbarActions"] {
+    display: none !important;
+}
 
-/* Share */
+/* Esconde Share */
 [data-testid="stAppDeployButton"] {
     display: none !important;
 }
 
-/* GitHub */
-a[href*="github.com"] {
-    display: none !important;
-}
-
-/* Botões de editar, favorito/estrela e ações equivalentes */
-button[aria-label*="Edit"],
-button[aria-label*="edit"],
-button[title*="Edit"],
-button[title*="edit"],
-button[aria-label*="Favorite"],
-button[aria-label*="favorite"],
-button[title*="Favorite"],
-button[title*="favorite"],
-button[aria-label*="GitHub"],
-button[title*="GitHub"] {
-    display: none !important;
-}
-
-/* Menu principal */
+/* Esconde menu principal sem esconder o controle da sidebar */
 #MainMenu {
     display: none !important;
 }
 
-/* Widget de status */
+/* Esconde status */
 [data-testid="stStatusWidget"] {
     display: none !important;
 }
 
 /* Ajuste do conteúdo */
 .block-container {
-    padding-top: 1rem;
+    padding-top: 2rem;
 }
 
 </style>
