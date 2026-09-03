@@ -29,19 +29,21 @@ st.markdown("""
 <style>
 
 /* =====================================================
-   CABEÇALHO DO STREAMLIT - MANTER VISÍVEL
+   CABEÇALHO DO STREAMLIT
+   Mantém ativo para permitir reabrir a barra lateral
    ===================================================== */
-
 header[data-testid="stHeader"] {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
-    height: 3rem !important;
     background: transparent !important;
     z-index: 999999 !important;
 }
 
-/* Botão de abrir a barra lateral */
+/* =====================================================
+   BOTÃO DE REABRIR A BARRA LATERAL
+   NÃO ESCONDER
+   ===================================================== */
 [data-testid="stSidebarCollapsedControl"] {
     display: flex !important;
     visibility: visible !important;
@@ -52,8 +54,43 @@ header[data-testid="stHeader"] {
     z-index: 9999999 !important;
 }
 
-/* Remove apenas o menu principal */
+/* =====================================================
+   ESCONDER APENAS OS BOTÕES DO CANTO SUPERIOR DIREITO
+   IMPORTANTE: NÃO esconder a stToolbar inteira, pois ela
+   pode conter o controle de reabrir a barra lateral.
+   ===================================================== */
+
+/* Share */
+[data-testid="stAppDeployButton"] {
+    display: none !important;
+}
+
+/* GitHub */
+a[href*="github.com"] {
+    display: none !important;
+}
+
+/* Botões de editar, favorito/estrela e ações equivalentes */
+button[aria-label*="Edit"],
+button[aria-label*="edit"],
+button[title*="Edit"],
+button[title*="edit"],
+button[aria-label*="Favorite"],
+button[aria-label*="favorite"],
+button[title*="Favorite"],
+button[title*="favorite"],
+button[aria-label*="GitHub"],
+button[title*="GitHub"] {
+    display: none !important;
+}
+
+/* Menu principal */
 #MainMenu {
+    display: none !important;
+}
+
+/* Widget de status */
+[data-testid="stStatusWidget"] {
     display: none !important;
 }
 
@@ -64,6 +101,7 @@ header[data-testid="stHeader"] {
 
 </style>
 """, unsafe_allow_html=True)
+
 # ============================================================
 # SESSION STATE
 # ============================================================
