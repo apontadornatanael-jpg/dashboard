@@ -488,216 +488,215 @@ def excel_boletim(boletim_id):
 # EXCEL CONSOLIDADO OPERACIONAL
 # ============================================================
 def excel_consolidado():
+    """Gera um Excel executivo completo e recalcula horas/ROP com lógica robusta."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     from openpyxl.chart import BarChart, LineChart, PieChart, Reference
     from openpyxl.drawing.image import Image as XLImage
+    from openpyxl.formatting.rule import ColorScaleRule, DataBarRule
+    from openpyxl.worksheet.table import Table, TableStyleInfo
 
     wb = Workbook()
     ws_dash = wb.active
     ws_dash.title = "DASHBOARD"
 
-    dark = PatternFill("solid", fgColor="102A43")
-    gold = PatternFill("solid", fgColor="D99A00")
-    light = PatternFill("solid", fgColor="EAF0F5")
-    green = PatternFill("solid", fgColor="D9EAD3")
-    white = Font(color="FFFFFF", bold=True, size=14)
-    title_font = Font(bold=True, size=20, color="102A43")
+    navy = "102A43"
+    blue = "1F4E78"
+    gold = "D99A00"
+    pale = "EAF0F5"
+    green = "D9EAD3"
+    red = "F4CCCC"
+    dark_fill = PatternFill("solid", fgColor=navy)
+    gold_fill = PatternFill("solid", fgColor=gold)
+    pale_fill = PatternFill("solid", fgColor=pale)
+    green_fill = PatternFill("solid", fgColor=green)
+    white_bold = Font(color="FFFFFF", bold=True, size=12)
+    title_font = Font(bold=True, size=22, color=navy)
     bold = Font(bold=True)
-    thin = Side(style="thin", color="A0A0A0")
+    thin = Side(style="thin", color="D0D7DE")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    # Dados consolidados
+    # Produção e horas são agregadas separadamente por boletim para nunca duplicar
+    # horas quando houver várias manobras e vários apontamentos no mesmo boletim.
     dados = query("""
-        SELECT
-            b.id AS boletim_id,
-            b.data,
-            b.turno,
-            b.projeto,
-            b.cliente,
-            e.codigo AS equipe,
-            e.nome AS nome_equipe,
-            s.codigo AS sonda,
-            s.modelo AS modelo_sonda,
-            f.identificacao AS furo,
-            COALESCE(SUM(COALESCE(m.ate_m,0)-COALESCE(m.de_m,0)),0) AS metros,
-            COALESCE(SUM(COALESCE(m.recuperado_m,0)),0) AS recuperado
+        SELECT b.id AS boletim_id, b.data, b.turno, b.projeto, b.cliente,
+               e.codigo AS equipe, e.nome AS nome_equipe,
+               s.codigo AS sonda, s.modelo AS modelo_sonda,
+               f.identificacao AS furo,
+               COALESCE(m.metros,0) AS metros,
+               COALESCE(m.recuperado,0) AS recuperado
         FROM boletins b
         LEFT JOIN equipes e ON e.id=b.equipe_id
         LEFT JOIN sondas s ON s.id=b.sonda_id
         LEFT JOIN furos f ON f.id=b.furo_id
-        LEFT JOIN manobras m ON m.boletim_id=b.id
-        GROUP BY b.id,b.data,b.turno,b.projeto,b.cliente,e.codigo,e.nome,s.codigo,s.modelo,f.identificacao
+        LEFT JOIN (
+            SELECT boletim_id,
+                   SUM(COALESCE(ate_m,0)-COALESCE(de_m,0)) AS metros,
+                   SUM(COALESCE(recuperado_m,0)) AS recuperado
+            FROM manobras GROUP BY boletim_id
+        ) m ON m.boletim_id=b.id
         ORDER BY b.data,b.id
     """)
 
     horas = query("""
-        SELECT b.id AS boletim_id,
-               COALESCE(SUM(CASE WHEN a.classificacao='OPERAÇÃO DIRETA'
+        SELECT p.boletim_id,
+               COALESCE(SUM(CASE
+                   WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA'
+                         OR p.codigo_atividade IN (14,15,16,17,18))
                    THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_operacao,
+               COALESCE(SUM(CASE
+                   WHEN TRIM(UPPER(COALESCE(a.classificacao,'')))='MANUTENÇÃO PREVENTIVA'
+                   THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_manut_preventiva,
+               COALESCE(SUM(CASE
+                   WHEN TRIM(UPPER(COALESCE(a.classificacao,'')))='MECÂNICA CORRETIVA'
+                   THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_manut_corretiva,
+               COALESCE(SUM(CASE
+                   WHEN TRIM(UPPER(COALESCE(a.classificacao,'')))='PARADA EXTERNA'
+                   THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_parada_externa,
                COALESCE(SUM(COALESCE(p.horas,0)),0) AS horas_apontadas
-        FROM boletins b
-        LEFT JOIN apontamentos p ON p.boletim_id=b.id
+        FROM apontamentos p
         LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
-        GROUP BY b.id
+        GROUP BY p.boletim_id
     """)
 
-    if dados.empty:
-        dados = pd.DataFrame(columns=["boletim_id","data","turno","projeto","cliente","equipe","nome_equipe","sonda","modelo_sonda","furo","metros","recuperado"])
-    if horas.empty:
-        horas = pd.DataFrame(columns=["boletim_id","horas_operacao","horas_apontadas"])
-
-    base = dados.merge(horas, on="boletim_id", how="left")
-    for col in ["metros","recuperado","horas_operacao","horas_apontadas"]:
-        if col in base.columns:
-            base[col] = pd.to_numeric(base[col], errors="coerce").fillna(0.0)
-    base["Recuperação %"] = (base["recuperado"] / base["metros"].replace(0, pd.NA) * 100).fillna(0.0)
-    base["ROP (m/h)"] = (base["metros"] / base["horas_operacao"].replace(0, pd.NA)).fillna(0.0)
+    base = dados.merge(horas, on="boletim_id", how="left") if not dados.empty else dados.copy()
+    if base.empty:
+        base = pd.DataFrame(columns=["boletim_id","data","turno","projeto","cliente","equipe","nome_equipe","sonda","modelo_sonda","furo","metros","recuperado","horas_operacao","horas_manut_preventiva","horas_manut_corretiva","horas_parada_externa","horas_apontadas"])
+    numeric_cols = ["metros","recuperado","horas_operacao","horas_manut_preventiva","horas_manut_corretiva","horas_parada_externa","horas_apontadas"]
+    for col in numeric_cols:
+        base[col] = pd.to_numeric(base.get(col,0), errors="coerce").fillna(0.0)
+    base["Recuperação %"] = (base["recuperado"] / base["metros"].replace(0,pd.NA)*100).fillna(0.0)
+    base["ROP (m/h)"] = (base["metros"] / base["horas_operacao"].replace(0,pd.NA)).fillna(0.0)
+    base["Horas de Parada"] = (base["horas_apontadas"] - base["horas_operacao"]).clip(lower=0)
     base["data_dt"] = pd.to_datetime(base["data"], errors="coerce")
     base["semana"] = base["data_dt"].apply(lambda x: f"{x.isocalendar().year}-S{x.isocalendar().week:02d}" if pd.notna(x) else "")
     base["mes"] = base["data_dt"].dt.strftime("%Y-%m").fillna("")
 
-    # Dashboard
-    ws_dash.merge_cells("A1:H1")
-    ws_dash["A1"] = "DDH CAMPO - DASHBOARD CONSOLIDADO"
-    ws_dash["A1"].font = title_font
-    ws_dash["A1"].alignment = Alignment(horizontal="center")
-    ws_dash.row_dimensions[1].height = 28
+    def calc_group(df, cols):
+        if df.empty:
+            return pd.DataFrame(columns=cols+["Metros","Recuperado","Horas Operação","Horas Apontadas","Boletins","Recuperação %","ROP (m/h)"])
+        out=df.groupby(cols,dropna=False,as_index=False).agg(
+            Metros=("metros","sum"), Recuperado=("recuperado","sum"),
+            **{"Horas Operação":("horas_operacao","sum"),"Horas Apontadas":("horas_apontadas","sum")},
+            Boletins=("boletim_id","count"))
+        out["Recuperação %"]=(out["Recuperado"]/out["Metros"].replace(0,pd.NA)*100).fillna(0)
+        out["ROP (m/h)"]=(out["Metros"]/out["Horas Operação"].replace(0,pd.NA)).fillna(0)
+        return out
+
+    diaria=calc_group(base,["data"])
+    semanal=calc_group(base,["semana"])
+    mensal=calc_group(base,["mes"])
+    equipes=calc_group(base,["equipe","nome_equipe"]).sort_values("Metros",ascending=False)
+    sondas=calc_group(base,["sonda","modelo_sonda"]).sort_values("Metros",ascending=False)
+
+    # Dashboard executivo
+    ws_dash.merge_cells("A1:V1")
+    ws_dash["A1"]="DDH CAMPO | DASHBOARD EXECUTIVO"
+    ws_dash["A1"].font=title_font
+    ws_dash["A1"].alignment=Alignment(horizontal="center",vertical="center")
+    ws_dash.row_dimensions[1].height=34
+    ws_dash.merge_cells("A2:V2")
+    ws_dash["A2"]=f"Atualizado automaticamente em {datetime.now().strftime('%d/%m/%Y %H:%M')} | Baseado nos boletins cadastrados"
+    ws_dash["A2"].alignment=Alignment(horizontal="center")
 
     if LOGO_PATH.exists():
         try:
-            img = XLImage(str(LOGO_PATH))
-            img.width = 95
-            img.height = 95
-            ws_dash.add_image(img, "A3")
-        except Exception:
-            pass
+            img=XLImage(str(LOGO_PATH)); img.width=78; img.height=78; ws_dash.add_image(img,"A4")
+        except Exception: pass
 
-    total_metros = float(base["metros"].sum()) if not base.empty else 0.0
-    total_rec = float(base["recuperado"].sum()) if not base.empty else 0.0
-    total_horas = float(base["horas_operacao"].sum()) if not base.empty else 0.0
-    total_boletins = int(len(base))
-    rec_pct = total_rec / total_metros * 100 if total_metros else 0.0
-    rop = total_metros / total_horas if total_horas else 0.0
+    total_metros=float(base["metros"].sum()); total_rec=float(base["recuperado"].sum())
+    total_horas=float(base["horas_operacao"].sum()); total_ap=float(base["horas_apontadas"].sum())
+    total_boletins=int(len(base)); rec_pct=total_rec/total_metros*100 if total_metros else 0
+    rop=total_metros/total_horas if total_horas else 0
+    disponibilidade=((total_ap-base["horas_manut_corretiva"].sum())/total_ap*100) if total_ap else 0
+    utilizacao=(total_horas/(total_ap-base["horas_manut_corretiva"].sum())*100) if (total_ap-base["horas_manut_corretiva"].sum())>0 else 0
 
-    cards = [
-        ("A5","⛏️ METROS TOTAIS", f"{total_metros:,.2f} m"),
-        ("C5","🧪 RECUPERAÇÃO", f"{rec_pct:.1f}%"),
-        ("E5","⏱️ HORAS OPERAÇÃO", f"{total_horas:,.2f} h"),
-        ("G5","⚡ ROP MÉDIO", f"{rop:.2f} m/h"),
-        ("A9","📋 BOLETINS", str(total_boletins)),
-        ("C9","👥 EQUIPES", str(int(base['equipe'].replace('', pd.NA).nunique()) if not base.empty else 0)),
-        ("E9","🔩 SONDAS", str(int(base['sonda'].replace('', pd.NA).nunique()) if not base.empty else 0)),
-    ]
-    for cell, label, value in cards:
-        col = ws_dash[cell].column
-        row = ws_dash[cell].row
-        ws_dash.merge_cells(start_row=row, start_column=col, end_row=row, end_column=col+1)
-        ws_dash.cell(row,col,label)
-        ws_dash.cell(row,col).fill = dark
-        ws_dash.cell(row,col).font = Font(color="FFFFFF",bold=True)
-        ws_dash.cell(row,col).alignment = Alignment(horizontal="center")
-        ws_dash.merge_cells(start_row=row+1, start_column=col, end_row=row+2, end_column=col+1)
-        ws_dash.cell(row+1,col,value)
-        ws_dash.cell(row+1,col).fill = green
-        ws_dash.cell(row+1,col).font = Font(bold=True,size=16)
-        ws_dash.cell(row+1,col).alignment = Alignment(horizontal="center", vertical="center")
+    cards=[("A5","METROS TOTAIS",f"{total_metros:,.2f} m"),("D5","RECUPERAÇÃO",f"{rec_pct:.1f}%"),("G5","HORAS OPERAÇÃO",f"{total_horas:,.2f} h"),("J5","ROP MÉDIO",f"{rop:.2f} m/h"),("M5","BOLETINS",str(total_boletins)),("P5","HORAS APONTADAS",f"{total_ap:,.2f} h"),("S5","UTILIZAÇÃO",f"{utilizacao:.1f}%")]
+    for cell,label,value in cards:
+        c=ws_dash[cell].column; r=ws_dash[cell].row
+        ws_dash.merge_cells(start_row=r,start_column=c,end_row=r,end_column=c+1)
+        ws_dash.cell(r,c,label).fill=dark_fill; ws_dash.cell(r,c).font=white_bold; ws_dash.cell(r,c).alignment=Alignment(horizontal="center")
+        ws_dash.merge_cells(start_row=r+1,start_column=c,end_row=r+2,end_column=c+1)
+        ws_dash.cell(r+1,c,value).fill=green_fill; ws_dash.cell(r+1,c).font=Font(bold=True,size=15); ws_dash.cell(r+1,c).alignment=Alignment(horizontal="center",vertical="center")
+    ws_dash["A10"]="INDICADORES DE DISPONIBILIDADE"
+    ws_dash["A10"].font=bold
+    ws_dash["D10"]="Disponibilidade Física"; ws_dash["E10"]=f"{disponibilidade:.1f}%"
+    ws_dash["G10"]="Horas de Parada"; ws_dash["H10"]=f"{max(total_ap-total_horas,0):.2f} h"
 
-    ws_dash["A13"] = "O arquivo é atualizado automaticamente com base nos boletins cadastrados no DDH CAMPO."
-    ws_dash.merge_cells("A13:H13")
-    ws_dash["A13"].alignment = Alignment(horizontal="center")
-
-    # Data sheets helper
-    def write_df(ws, df, title):
-        ws["A1"] = title
-        ws["A1"].fill = dark
-        ws["A1"].font = white
-        headers = list(df.columns)
+    def write_df(name,df,title):
+        ws=wb.create_sheet(name)
+        n=max(1,len(df.columns))
+        ws.merge_cells(start_row=1,start_column=1,end_row=1,end_column=n)
+        ws["A1"]=title; ws["A1"].fill=dark_fill; ws["A1"].font=white_bold; ws["A1"].alignment=Alignment(horizontal="center")
+        headers=list(df.columns)
         for i,h in enumerate(headers,1):
-            cell=ws.cell(3,i,h)
-            cell.fill=gold
-            cell.font=bold
-            cell.alignment=Alignment(horizontal="center")
-        for r_idx,row in enumerate(df.itertuples(index=False, name=None),4):
-            for c_idx,val in enumerate(row,1):
-                ws.cell(r_idx,c_idx,None if pd.isna(val) else val)
-        for row in ws.iter_rows(min_row=3, max_row=max(3,len(df)+3), min_col=1, max_col=max(1,len(headers))):
-            for cell in row:
-                cell.border=border
-                cell.alignment=Alignment(vertical="center")
-        for i,h in enumerate(headers,1):
-            width=max(12,min(28,len(str(h))+4))
-            ws.column_dimensions[get_column_letter(i)].width=width
-        ws.freeze_panes="A4"
+            cell=ws.cell(3,i,h); cell.fill=gold_fill; cell.font=bold; cell.alignment=Alignment(horizontal="center")
+        for ri,row in enumerate(df.itertuples(index=False,name=None),4):
+            for ci,val in enumerate(row,1): ws.cell(ri,ci,None if pd.isna(val) else val)
+        for row in ws.iter_rows(min_row=3,max_row=max(3,len(df)+3),min_col=1,max_col=n):
+            for cell in row: cell.border=border; cell.alignment=Alignment(vertical="center")
+        for i,h in enumerate(headers,1): ws.column_dimensions[get_column_letter(i)].width=max(13,min(28,len(str(h))+5))
+        ws.freeze_panes="A4"; ws.auto_filter.ref=f"A3:{get_column_letter(n)}{max(3,len(df)+3)}"; ws.sheet_view.showGridLines=False
+        if len(df)>0:
+            tab=Table(displayName="Tbl"+re.sub(r"[^A-Za-z0-9]","",name.title()),ref=f"A3:{get_column_letter(n)}{len(df)+3}")
+            tab.tableStyleInfo=TableStyleInfo(name="TableStyleMedium2",showRowStripes=True,showColumnStripes=False)
+            ws.add_table(tab)
+        # Destaque de indicadores
+        for idx,h in enumerate(headers,1):
+            if h in ("Metros","metros"):
+                ws.conditional_formatting.add(f"{get_column_letter(idx)}4:{get_column_letter(idx)}{max(4,len(df)+3)}",DataBarRule(start_type="min",end_type="max"))
+            if h in ("ROP (m/h)","Recuperação %"):
+                ws.conditional_formatting.add(f"{get_column_letter(idx)}4:{get_column_letter(idx)}{max(4,len(df)+3)}",ColorScaleRule(start_type="min",start_color="F8696B",mid_type="percentile",mid_value=50,mid_color="FFEB84",end_type="max",end_color="63BE7B"))
+        return ws
 
-    base_export = base.drop(columns=["data_dt"], errors="ignore").copy()
-    write_df(wb.create_sheet("DADOS_BOLETINS"), base_export, "DADOS CONSOLIDADOS DOS BOLETINS")
+    base_export=base.drop(columns=["data_dt"],errors="ignore")
+    ws_base=write_df("DADOS_BOLETINS",base_export,"DADOS CONSOLIDADOS DOS BOLETINS")
+    ws_diaria=write_df("PRODUCAO_DIARIA",diaria,"PRODUÇÃO DIÁRIA")
+    ws_sem=write_df("PRODUCAO_SEMANAL",semanal,"PRODUÇÃO SEMANAL")
+    ws_mes=write_df("PRODUCAO_MENSAL",mensal,"PRODUÇÃO MENSAL")
+    ws_eq=write_df("EQUIPES",equipes,"RANKING E PRODUÇÃO POR EQUIPE")
+    ws_s=write_df("SONDAS",sondas,"RANKING E PRODUÇÃO POR SONDA")
 
-    diaria = base.groupby("data", dropna=False, as_index=False).agg(
-        Metros=("metros","sum"), Recuperado=("recuperado","sum"),
-        Horas_Operacao=("horas_operacao","sum"), Boletins=("boletim_id","count")
-    ) if not base.empty else pd.DataFrame(columns=["data","Metros","Recuperado","Horas_Operacao","Boletins"])
-    diaria["Recuperação %"]=(diaria["Recuperado"]/diaria["Metros"].replace(0,pd.NA)*100).fillna(0)
-    diaria["ROP (m/h)"]=(diaria["Metros"]/diaria["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
-    write_df(wb.create_sheet("PRODUCAO_DIARIA"), diaria, "PRODUÇÃO DIÁRIA")
+    # Evolução acumulada
+    evolucao=diaria.copy()
+    if not evolucao.empty:
+        evolucao["Metros Acumulados"]=evolucao["Metros"].cumsum()
+    ws_ev=write_df("EVOLUCAO_ACUMULADA",evolucao,"EVOLUÇÃO DA PRODUÇÃO ACUMULADA")
 
-    semanal = base.groupby("semana", dropna=False, as_index=False).agg(Metros=("metros","sum"),Recuperado=("recuperado","sum"),Horas_Operacao=("horas_operacao","sum"),Boletins=("boletim_id","count")) if not base.empty else pd.DataFrame(columns=["semana","Metros","Recuperado","Horas_Operacao","Boletins"])
-    semanal["Recuperação %"]=(semanal["Recuperado"]/semanal["Metros"].replace(0,pd.NA)*100).fillna(0)
-    semanal["ROP (m/h)"]=(semanal["Metros"]/semanal["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
-    write_df(wb.create_sheet("PRODUCAO_SEMANAL"), semanal, "PRODUÇÃO SEMANAL")
+    # Resumo das classificações de tempo
+    tempo=query("""
+        SELECT COALESCE(NULLIF(TRIM(a.classificacao),''),'SEM CLASSIFICAÇÃO') AS Classificação,
+               SUM(COALESCE(p.horas,0)) AS Horas
+        FROM apontamentos p LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+        GROUP BY COALESCE(NULLIF(TRIM(a.classificacao),''),'SEM CLASSIFICAÇÃO')
+        ORDER BY Horas DESC
+    """)
+    ws_t=write_df("HORAS_CLASSIFICACAO",tempo,"HORAS POR CLASSIFICAÇÃO OPERACIONAL")
 
-    mensal = base.groupby("mes", dropna=False, as_index=False).agg(Metros=("metros","sum"),Recuperado=("recuperado","sum"),Horas_Operacao=("horas_operacao","sum"),Boletins=("boletim_id","count")) if not base.empty else pd.DataFrame(columns=["mes","Metros","Recuperado","Horas_Operacao","Boletins"])
-    mensal["Recuperação %"]=(mensal["Recuperado"]/mensal["Metros"].replace(0,pd.NA)*100).fillna(0)
-    mensal["ROP (m/h)"]=(mensal["Metros"]/mensal["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
-    write_df(wb.create_sheet("PRODUCAO_MENSAL"), mensal, "PRODUÇÃO MENSAL")
+    # Gráficos executivos
+    if len(equipes)>0:
+        ch=BarChart(); ch.title="Produção por Equipe"; ch.y_axis.title="Metros"; ch.x_axis.title="Equipe"; ch.height=8; ch.width=14
+        ch.add_data(Reference(ws_eq,min_col=3,min_row=3,max_row=len(equipes)+3),titles_from_data=True)
+        ch.set_categories(Reference(ws_eq,min_col=1,min_row=4,max_row=len(equipes)+3)); ws_dash.add_chart(ch,"A13")
+    if len(evolucao)>0:
+        ch=LineChart(); ch.title="Produção Acumulada"; ch.y_axis.title="Metros"; ch.height=8; ch.width=14
+        col=evolucao.columns.get_loc("Metros Acumulados")+1
+        ch.add_data(Reference(ws_ev,min_col=col,min_row=3,max_row=len(evolucao)+3),titles_from_data=True)
+        ch.set_categories(Reference(ws_ev,min_col=1,min_row=4,max_row=len(evolucao)+3)); ws_dash.add_chart(ch,"P13")
+    if len(tempo)>0:
+        ch=PieChart(); ch.title="Distribuição das Horas"; ch.height=8; ch.width=12
+        ch.add_data(Reference(ws_t,min_col=2,min_row=3,max_row=len(tempo)+3),titles_from_data=True)
+        ch.set_categories(Reference(ws_t,min_col=1,min_row=4,max_row=len(tempo)+3)); ws_dash.add_chart(ch,"A30")
+    if len(sondas)>0:
+        ch=BarChart(); ch.title="ROP por Sonda"; ch.y_axis.title="m/h"; ch.height=8; ch.width=14
+        col=sondas.columns.get_loc("ROP (m/h)")+1
+        ch.add_data(Reference(ws_s,min_col=col,min_row=3,max_row=len(sondas)+3),titles_from_data=True)
+        ch.set_categories(Reference(ws_s,min_col=1,min_row=4,max_row=len(sondas)+3)); ws_dash.add_chart(ch,"P30")
 
-    equipes = base.groupby(["equipe","nome_equipe"], dropna=False, as_index=False).agg(Metros=("metros","sum"),Recuperado=("recuperado","sum"),Horas_Operacao=("horas_operacao","sum"),Boletins=("boletim_id","count")) if not base.empty else pd.DataFrame(columns=["equipe","nome_equipe","Metros","Recuperado","Horas_Operacao","Boletins"])
-    equipes["Recuperação %"]=(equipes["Recuperado"]/equipes["Metros"].replace(0,pd.NA)*100).fillna(0)
-    equipes["ROP (m/h)"]=(equipes["Metros"]/equipes["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
-    equipes=equipes.sort_values("Metros",ascending=False)
-    write_df(wb.create_sheet("EQUIPES"), equipes, "RANKING E PRODUÇÃO POR EQUIPE")
-
-    sondas = base.groupby(["sonda","modelo_sonda"], dropna=False, as_index=False).agg(Metros=("metros","sum"),Recuperado=("recuperado","sum"),Horas_Operacao=("horas_operacao","sum"),Boletins=("boletim_id","count")) if not base.empty else pd.DataFrame(columns=["sonda","modelo_sonda","Metros","Recuperado","Horas_Operacao","Boletins"])
-    sondas["Recuperação %"]=(sondas["Recuperado"]/sondas["Metros"].replace(0,pd.NA)*100).fillna(0)
-    sondas["ROP (m/h)"]=(sondas["Metros"]/sondas["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
-    sondas=sondas.sort_values("Metros",ascending=False)
-    write_df(wb.create_sheet("SONDAS"), sondas, "RANKING E PRODUÇÃO POR SONDA")
-
-    # Gráficos no dashboard
-    if not equipes.empty:
-        ws_eq = wb["EQUIPES"]
-        chart = BarChart()
-        chart.title = "Produção por Equipe"
-        chart.y_axis.title = "Metros"
-        chart.x_axis.title = "Equipe"
-        data_ref = Reference(ws_eq, min_col=3, min_row=3, max_row=3+len(equipes))
-        cats_ref = Reference(ws_eq, min_col=1, min_row=4, max_row=3+len(equipes))
-        chart.add_data(data_ref, titles_from_data=True)
-        chart.set_categories(cats_ref)
-        chart.height=8
-        chart.width=14
-        ws_dash.add_chart(chart, "A15")
-
-    if not diaria.empty:
-        ws_d = wb["PRODUCAO_DIARIA"]
-        chart2 = LineChart()
-        chart2.title = "Evolução da Produção Diária"
-        chart2.y_axis.title = "Metros"
-        data_ref = Reference(ws_d, min_col=2, min_row=3, max_row=3+len(diaria))
-        cats_ref = Reference(ws_d, min_col=1, min_row=4, max_row=3+len(diaria))
-        chart2.add_data(data_ref, titles_from_data=True)
-        chart2.set_categories(cats_ref)
-        chart2.height=8
-        chart2.width=14
-        ws_dash.add_chart(chart2, "P15")
-
-    for ws in wb.worksheets:
-        ws.sheet_view.showGridLines = False
-
-    out=BytesIO()
-    wb.save(out)
-    return out.getvalue()
+    for col in range(1,23): ws_dash.column_dimensions[get_column_letter(col)].width=14
+    ws_dash.sheet_view.showGridLines=False
+    out=BytesIO(); wb.save(out); return out.getvalue()
 
 # ============================================================
 # LOGIN
@@ -813,7 +812,7 @@ if page == "🏠 Painel DDH":
 
     horas = query("""
         SELECT COALESCE(SUM(
-            CASE WHEN a.classificacao='OPERAÇÃO DIRETA'
+            CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
             THEN COALESCE(p.horas,0) ELSE 0 END
         ),0) horas_operacao
         FROM apontamentos p
@@ -853,7 +852,7 @@ if page == "🏠 Painel DDH":
         ) m ON m.equipe_id=e.id
         LEFT JOIN (
             SELECT b.equipe_id,
-                   SUM(CASE WHEN a.classificacao='OPERAÇÃO DIRETA'
+                   SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
                        THEN COALESCE(p.horas,0) ELSE 0 END) horas_operacao
             FROM boletins b
             LEFT JOIN apontamentos p ON p.boletim_id=b.id
@@ -905,7 +904,7 @@ if page == "🏠 Painel DDH":
         ) m ON m.sonda_id=s.id
         LEFT JOIN (
             SELECT b.sonda_id,
-                   SUM(CASE WHEN a.classificacao='OPERAÇÃO DIRETA'
+                   SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
                        THEN COALESCE(p.horas,0) ELSE 0 END) horas_operacao
             FROM boletins b
             LEFT JOIN apontamentos p ON p.boletim_id=b.id
@@ -1224,7 +1223,7 @@ elif page == "📅 Produção Diária":
 
         horas = query("""
             SELECT b.id AS boletim_id,
-                   COALESCE(SUM(CASE WHEN a.classificacao='OPERAÇÃO DIRETA'
+                   COALESCE(SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
                        THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_operacao
             FROM boletins b
             LEFT JOIN apontamentos p ON p.boletim_id=b.id
@@ -1912,7 +1911,7 @@ elif page == "🛠️ Gerenciamento":
             ) m ON m.equipe_id=e.id
             LEFT JOIN (
                 SELECT b.equipe_id,
-                       SUM(CASE WHEN a.classificacao='OPERAÇÃO DIRETA'
+                       SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
                            THEN COALESCE(p.horas,0) ELSE 0 END) horas_operacao
                 FROM boletins b
                 LEFT JOIN apontamentos p ON p.boletim_id=b.id
