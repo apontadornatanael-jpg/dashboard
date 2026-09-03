@@ -29,7 +29,7 @@ st.markdown("""
 <style>
 
 /* =====================================================
-   CABEÇALHO DO STREAMLIT - MANTER VISÍVEL
+   CABEÇALHO - NECESSÁRIO PARA O MENU LATERAL
    ===================================================== */
 
 header[data-testid="stHeader"] {
@@ -41,7 +41,7 @@ header[data-testid="stHeader"] {
     z-index: 999999 !important;
 }
 
-/* Botão de abrir a barra lateral */
+/* BOTÃO DE ABRIR A BARRA LATERAL */
 [data-testid="stSidebarCollapsedControl"] {
     display: flex !important;
     visibility: visible !important;
@@ -53,8 +53,7 @@ header[data-testid="stHeader"] {
 }
 
 /* =====================================================
-   ESCONDE BOTÕES DO CANTO SUPERIOR DIREITO
-   SEM ESCONDER O CONTROLE DA BARRA LATERAL
+   ESCONDER BOTÕES DO STREAMLIT
    ===================================================== */
 
 /* Share */
@@ -62,7 +61,7 @@ header[data-testid="stHeader"] {
     display: none !important;
 }
 
-/* Barra de ferramentas */
+/* Share + estrela + lápis + GitHub */
 [data-testid="stToolbar"] {
     display: none !important;
 }
@@ -71,6 +70,17 @@ header[data-testid="stHeader"] {
 #MainMenu {
     display: none !important;
 }
+
+/* =====================================================
+   CONTEÚDO
+   ===================================================== */
+
+.block-container {
+    padding-top: 1rem;
+}
+
+</style>
+""", unsafe_allow_html=True)
 # ============================================================
 # SESSION STATE
 # ============================================================
