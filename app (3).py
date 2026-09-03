@@ -646,7 +646,7 @@ def excel_consolidado():
         # Destaque de indicadores
         for idx,h in enumerate(headers,1):
             if h in ("Metros","metros"):
-                ws.conditional_formatting.add(f"{get_column_letter(idx)}4:{get_column_letter(idx)}{max(4,len(df)+3)}",DataBarRule(start_type="min",end_type="max"))
+                ws.conditional_formatting.add(f"{get_column_letter(idx)}4:{get_column_letter(idx)}{max(4,len(df)+3)}",DataBarRule(start_type="min", end_type="max", color="4472C4", showValue=True))
             if h in ("ROP (m/h)","Recuperação %"):
                 ws.conditional_formatting.add(f"{get_column_letter(idx)}4:{get_column_letter(idx)}{max(4,len(df)+3)}",ColorScaleRule(start_type="min",start_color="F8696B",mid_type="percentile",mid_value=50,mid_color="FFEB84",end_type="max",end_color="63BE7B"))
         return ws
