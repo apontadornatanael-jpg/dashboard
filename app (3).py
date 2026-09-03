@@ -40,6 +40,7 @@ PAGES_ADMIN = [
     "🏠 Painel DDH",
     "📝 Novo Boletim",
     "📅 Produção Diária",
+    "📊 Relatórios e Excel",
     "📋 Boletins Salvos",
     "👷 Colaboradores",
     "👥 Equipes",
@@ -53,6 +54,7 @@ PAGES_SUPERVISOR = [
     "🏠 Painel DDH",
     "📝 Novo Boletim",
     "📅 Produção Diária",
+    "📊 Relatórios e Excel",
     "📋 Boletins Salvos",
     "👷 Colaboradores",
     "👥 Equipes",
@@ -478,6 +480,222 @@ def excel_boletim(boletim_id):
     ws.freeze_panes = "A4"
 
     out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+# ============================================================
+# EXCEL CONSOLIDADO OPERACIONAL
+# ============================================================
+def excel_consolidado():
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from openpyxl.chart import BarChart, LineChart, PieChart, Reference
+    from openpyxl.drawing.image import Image as XLImage
+
+    wb = Workbook()
+    ws_dash = wb.active
+    ws_dash.title = "DASHBOARD"
+
+    dark = PatternFill("solid", fgColor="102A43")
+    gold = PatternFill("solid", fgColor="D99A00")
+    light = PatternFill("solid", fgColor="EAF0F5")
+    green = PatternFill("solid", fgColor="D9EAD3")
+    white = Font(color="FFFFFF", bold=True, size=14)
+    title_font = Font(bold=True, size=20, color="102A43")
+    bold = Font(bold=True)
+    thin = Side(style="thin", color="A0A0A0")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # Dados consolidados
+    dados = query("""
+        SELECT
+            b.id AS boletim_id,
+            b.data,
+            b.turno,
+            b.projeto,
+            b.cliente,
+            e.codigo AS equipe,
+            e.nome AS nome_equipe,
+            s.codigo AS sonda,
+            s.modelo AS modelo_sonda,
+            f.identificacao AS furo,
+            COALESCE(SUM(COALESCE(m.ate_m,0)-COALESCE(m.de_m,0)),0) AS metros,
+            COALESCE(SUM(COALESCE(m.recuperado_m,0)),0) AS recuperado
+        FROM boletins b
+        LEFT JOIN equipes e ON e.id=b.equipe_id
+        LEFT JOIN sondas s ON s.id=b.sonda_id
+        LEFT JOIN furos f ON f.id=b.furo_id
+        LEFT JOIN manobras m ON m.boletim_id=b.id
+        GROUP BY b.id,b.data,b.turno,b.projeto,b.cliente,e.codigo,e.nome,s.codigo,s.modelo,f.identificacao
+        ORDER BY b.data,b.id
+    """)
+
+    horas = query("""
+        SELECT b.id AS boletim_id,
+               COALESCE(SUM(CASE WHEN a.classificacao='OPERAÇÃO DIRETA'
+                   THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_operacao,
+               COALESCE(SUM(COALESCE(p.horas,0)),0) AS horas_apontadas
+        FROM boletins b
+        LEFT JOIN apontamentos p ON p.boletim_id=b.id
+        LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+        GROUP BY b.id
+    """)
+
+    if dados.empty:
+        dados = pd.DataFrame(columns=["boletim_id","data","turno","projeto","cliente","equipe","nome_equipe","sonda","modelo_sonda","furo","metros","recuperado"])
+    if horas.empty:
+        horas = pd.DataFrame(columns=["boletim_id","horas_operacao","horas_apontadas"])
+
+    base = dados.merge(horas, on="boletim_id", how="left")
+    for col in ["metros","recuperado","horas_operacao","horas_apontadas"]:
+        if col in base.columns:
+            base[col] = pd.to_numeric(base[col], errors="coerce").fillna(0.0)
+    base["Recuperação %"] = (base["recuperado"] / base["metros"].replace(0, pd.NA) * 100).fillna(0.0)
+    base["ROP (m/h)"] = (base["metros"] / base["horas_operacao"].replace(0, pd.NA)).fillna(0.0)
+    base["data_dt"] = pd.to_datetime(base["data"], errors="coerce")
+    base["semana"] = base["data_dt"].apply(lambda x: f"{x.isocalendar().year}-S{x.isocalendar().week:02d}" if pd.notna(x) else "")
+    base["mes"] = base["data_dt"].dt.strftime("%Y-%m").fillna("")
+
+    # Dashboard
+    ws_dash.merge_cells("A1:H1")
+    ws_dash["A1"] = "DDH CAMPO - DASHBOARD CONSOLIDADO"
+    ws_dash["A1"].font = title_font
+    ws_dash["A1"].alignment = Alignment(horizontal="center")
+    ws_dash.row_dimensions[1].height = 28
+
+    if LOGO_PATH.exists():
+        try:
+            img = XLImage(str(LOGO_PATH))
+            img.width = 95
+            img.height = 95
+            ws_dash.add_image(img, "A3")
+        except Exception:
+            pass
+
+    total_metros = float(base["metros"].sum()) if not base.empty else 0.0
+    total_rec = float(base["recuperado"].sum()) if not base.empty else 0.0
+    total_horas = float(base["horas_operacao"].sum()) if not base.empty else 0.0
+    total_boletins = int(len(base))
+    rec_pct = total_rec / total_metros * 100 if total_metros else 0.0
+    rop = total_metros / total_horas if total_horas else 0.0
+
+    cards = [
+        ("A5","⛏️ METROS TOTAIS", f"{total_metros:,.2f} m"),
+        ("C5","🧪 RECUPERAÇÃO", f"{rec_pct:.1f}%"),
+        ("E5","⏱️ HORAS OPERAÇÃO", f"{total_horas:,.2f} h"),
+        ("G5","⚡ ROP MÉDIO", f"{rop:.2f} m/h"),
+        ("A9","📋 BOLETINS", str(total_boletins)),
+        ("C9","👥 EQUIPES", str(int(base['equipe'].replace('', pd.NA).nunique()) if not base.empty else 0)),
+        ("E9","🔩 SONDAS", str(int(base['sonda'].replace('', pd.NA).nunique()) if not base.empty else 0)),
+    ]
+    for cell, label, value in cards:
+        col = ws_dash[cell].column
+        row = ws_dash[cell].row
+        ws_dash.merge_cells(start_row=row, start_column=col, end_row=row, end_column=col+1)
+        ws_dash.cell(row,col,label)
+        ws_dash.cell(row,col).fill = dark
+        ws_dash.cell(row,col).font = Font(color="FFFFFF",bold=True)
+        ws_dash.cell(row,col).alignment = Alignment(horizontal="center")
+        ws_dash.merge_cells(start_row=row+1, start_column=col, end_row=row+2, end_column=col+1)
+        ws_dash.cell(row+1,col,value)
+        ws_dash.cell(row+1,col).fill = green
+        ws_dash.cell(row+1,col).font = Font(bold=True,size=16)
+        ws_dash.cell(row+1,col).alignment = Alignment(horizontal="center", vertical="center")
+
+    ws_dash["A13"] = "O arquivo é atualizado automaticamente com base nos boletins cadastrados no DDH CAMPO."
+    ws_dash.merge_cells("A13:H13")
+    ws_dash["A13"].alignment = Alignment(horizontal="center")
+
+    # Data sheets helper
+    def write_df(ws, df, title):
+        ws["A1"] = title
+        ws["A1"].fill = dark
+        ws["A1"].font = white
+        headers = list(df.columns)
+        for i,h in enumerate(headers,1):
+            cell=ws.cell(3,i,h)
+            cell.fill=gold
+            cell.font=bold
+            cell.alignment=Alignment(horizontal="center")
+        for r_idx,row in enumerate(df.itertuples(index=False, name=None),4):
+            for c_idx,val in enumerate(row,1):
+                ws.cell(r_idx,c_idx,None if pd.isna(val) else val)
+        for row in ws.iter_rows(min_row=3, max_row=max(3,len(df)+3), min_col=1, max_col=max(1,len(headers))):
+            for cell in row:
+                cell.border=border
+                cell.alignment=Alignment(vertical="center")
+        for i,h in enumerate(headers,1):
+            width=max(12,min(28,len(str(h))+4))
+            ws.column_dimensions[get_column_letter(i)].width=width
+        ws.freeze_panes="A4"
+
+    base_export = base.drop(columns=["data_dt"], errors="ignore").copy()
+    write_df(wb.create_sheet("DADOS_BOLETINS"), base_export, "DADOS CONSOLIDADOS DOS BOLETINS")
+
+    diaria = base.groupby("data", dropna=False, as_index=False).agg(
+        Metros=("metros","sum"), Recuperado=("recuperado","sum"),
+        Horas_Operacao=("horas_operacao","sum"), Boletins=("boletim_id","count")
+    ) if not base.empty else pd.DataFrame(columns=["data","Metros","Recuperado","Horas_Operacao","Boletins"])
+    diaria["Recuperação %"]=(diaria["Recuperado"]/diaria["Metros"].replace(0,pd.NA)*100).fillna(0)
+    diaria["ROP (m/h)"]=(diaria["Metros"]/diaria["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
+    write_df(wb.create_sheet("PRODUCAO_DIARIA"), diaria, "PRODUÇÃO DIÁRIA")
+
+    semanal = base.groupby("semana", dropna=False, as_index=False).agg(Metros=("metros","sum"),Recuperado=("recuperado","sum"),Horas_Operacao=("horas_operacao","sum"),Boletins=("boletim_id","count")) if not base.empty else pd.DataFrame(columns=["semana","Metros","Recuperado","Horas_Operacao","Boletins"])
+    semanal["Recuperação %"]=(semanal["Recuperado"]/semanal["Metros"].replace(0,pd.NA)*100).fillna(0)
+    semanal["ROP (m/h)"]=(semanal["Metros"]/semanal["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
+    write_df(wb.create_sheet("PRODUCAO_SEMANAL"), semanal, "PRODUÇÃO SEMANAL")
+
+    mensal = base.groupby("mes", dropna=False, as_index=False).agg(Metros=("metros","sum"),Recuperado=("recuperado","sum"),Horas_Operacao=("horas_operacao","sum"),Boletins=("boletim_id","count")) if not base.empty else pd.DataFrame(columns=["mes","Metros","Recuperado","Horas_Operacao","Boletins"])
+    mensal["Recuperação %"]=(mensal["Recuperado"]/mensal["Metros"].replace(0,pd.NA)*100).fillna(0)
+    mensal["ROP (m/h)"]=(mensal["Metros"]/mensal["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
+    write_df(wb.create_sheet("PRODUCAO_MENSAL"), mensal, "PRODUÇÃO MENSAL")
+
+    equipes = base.groupby(["equipe","nome_equipe"], dropna=False, as_index=False).agg(Metros=("metros","sum"),Recuperado=("recuperado","sum"),Horas_Operacao=("horas_operacao","sum"),Boletins=("boletim_id","count")) if not base.empty else pd.DataFrame(columns=["equipe","nome_equipe","Metros","Recuperado","Horas_Operacao","Boletins"])
+    equipes["Recuperação %"]=(equipes["Recuperado"]/equipes["Metros"].replace(0,pd.NA)*100).fillna(0)
+    equipes["ROP (m/h)"]=(equipes["Metros"]/equipes["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
+    equipes=equipes.sort_values("Metros",ascending=False)
+    write_df(wb.create_sheet("EQUIPES"), equipes, "RANKING E PRODUÇÃO POR EQUIPE")
+
+    sondas = base.groupby(["sonda","modelo_sonda"], dropna=False, as_index=False).agg(Metros=("metros","sum"),Recuperado=("recuperado","sum"),Horas_Operacao=("horas_operacao","sum"),Boletins=("boletim_id","count")) if not base.empty else pd.DataFrame(columns=["sonda","modelo_sonda","Metros","Recuperado","Horas_Operacao","Boletins"])
+    sondas["Recuperação %"]=(sondas["Recuperado"]/sondas["Metros"].replace(0,pd.NA)*100).fillna(0)
+    sondas["ROP (m/h)"]=(sondas["Metros"]/sondas["Horas_Operacao"].replace(0,pd.NA)).fillna(0)
+    sondas=sondas.sort_values("Metros",ascending=False)
+    write_df(wb.create_sheet("SONDAS"), sondas, "RANKING E PRODUÇÃO POR SONDA")
+
+    # Gráficos no dashboard
+    if not equipes.empty:
+        ws_eq = wb["EQUIPES"]
+        chart = BarChart()
+        chart.title = "Produção por Equipe"
+        chart.y_axis.title = "Metros"
+        chart.x_axis.title = "Equipe"
+        data_ref = Reference(ws_eq, min_col=3, min_row=3, max_row=3+len(equipes))
+        cats_ref = Reference(ws_eq, min_col=1, min_row=4, max_row=3+len(equipes))
+        chart.add_data(data_ref, titles_from_data=True)
+        chart.set_categories(cats_ref)
+        chart.height=8
+        chart.width=14
+        ws_dash.add_chart(chart, "A15")
+
+    if not diaria.empty:
+        ws_d = wb["PRODUCAO_DIARIA"]
+        chart2 = LineChart()
+        chart2.title = "Evolução da Produção Diária"
+        chart2.y_axis.title = "Metros"
+        data_ref = Reference(ws_d, min_col=2, min_row=3, max_row=3+len(diaria))
+        cats_ref = Reference(ws_d, min_col=1, min_row=4, max_row=3+len(diaria))
+        chart2.add_data(data_ref, titles_from_data=True)
+        chart2.set_categories(cats_ref)
+        chart2.height=8
+        chart2.width=14
+        ws_dash.add_chart(chart2, "P15")
+
+    for ws in wb.worksheets:
+        ws.sheet_view.showGridLines = False
+
+    out=BytesIO()
     wb.save(out)
     return out.getvalue()
 
@@ -1066,6 +1284,62 @@ elif page == "📅 Produção Diária":
                 historico["data"] = pd.to_datetime(historico["data"], errors="coerce")
                 grafico = historico.pivot_table(index="data", columns="equipe", values="metros", aggfunc="sum").fillna(0).sort_index()
                 st.line_chart(grafico)
+
+# ============================================================
+# RELATÓRIOS E EXCEL CONSOLIDADO
+# ============================================================
+elif page == "📊 Relatórios e Excel":
+    st.title("📊 RELATÓRIOS E EXCEL CONSOLIDADO")
+    st.caption("Acompanhe os dados e gere uma planilha completa para apresentações diárias, semanais e mensais.")
+
+    base_rel = query("""
+        SELECT b.data,e.codigo AS equipe,s.codigo AS sonda,
+               COALESCE(SUM(COALESCE(m.ate_m,0)-COALESCE(m.de_m,0)),0) AS metros,
+               COALESCE(SUM(COALESCE(m.recuperado_m,0)),0) AS recuperado
+        FROM boletins b
+        LEFT JOIN equipes e ON e.id=b.equipe_id
+        LEFT JOIN sondas s ON s.id=b.sonda_id
+        LEFT JOIN manobras m ON m.boletim_id=b.id
+        GROUP BY b.id,b.data,e.codigo,s.codigo
+        ORDER BY b.data DESC
+    """)
+
+    if base_rel.empty:
+        st.info("Ainda não existem boletins com produção para gerar o consolidado.")
+    else:
+        base_rel["Recuperação %"]=(base_rel["recuperado"]/base_rel["metros"].replace(0,pd.NA)*100).fillna(0)
+        base_rel["data_dt"]=pd.to_datetime(base_rel["data"],errors="coerce")
+        base_rel["semana"]=base_rel["data_dt"].apply(lambda x: f"{x.isocalendar().year}-S{x.isocalendar().week:02d}" if pd.notna(x) else "")
+        base_rel["mes"]=base_rel["data_dt"].dt.strftime("%Y-%m").fillna("")
+
+        total=float(base_rel["metros"].sum())
+        rec=float(base_rel["recuperado"].sum())
+        c1,c2,c3=st.columns(3)
+        c1.metric("⛏️ METROS CONSOLIDADOS",f"{total:.2f} m")
+        c2.metric("🧪 RECUPERAÇÃO MÉDIA",f"{(rec/total*100 if total else 0):.1f}%")
+        c3.metric("📋 LANÇAMENTOS",len(base_rel))
+
+        st.subheader("📅 Produção por Semana")
+        semanal_view=base_rel.groupby("semana",as_index=False)["metros"].sum().sort_values("semana")
+        st.dataframe(semanal_view,use_container_width=True,hide_index=True)
+        st.bar_chart(semanal_view.set_index("semana"))
+
+        st.subheader("📆 Produção por Mês")
+        mensal_view=base_rel.groupby("mes",as_index=False)["metros"].sum().sort_values("mes")
+        st.dataframe(mensal_view,use_container_width=True,hide_index=True)
+        st.bar_chart(mensal_view.set_index("mes"))
+
+        st.divider()
+        st.success("O Excel consolidado reúne Dashboard, dados dos boletins, produção diária, semanal, mensal, equipes e sondas.")
+        st.download_button(
+            "📥 BAIXAR EXCEL CONSOLIDADO COMPLETO",
+            data=excel_consolidado(),
+            file_name=f"DDH_CAMPO_CONSOLIDADO_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True,
+            key="baixar_excel_consolidado"
+        )
 
 # ============================================================
 # BOLETINS SALVOS
