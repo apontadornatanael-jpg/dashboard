@@ -5,6 +5,7 @@ import hashlib
 from datetime import date, datetime, time, timedelta
 from io import BytesIO
 from pathlib import Path
+import re
 
 # ============================================================
 # CONFIGURAÇÃO
