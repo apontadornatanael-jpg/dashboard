@@ -28,49 +28,50 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* Esconde o cabeçalho padrão do Streamlit */
-header {
-    visibility: hidden;
-}
+/* =========================================================
+   MANTÉM O CONTROLE DA BARRA LATERAL FUNCIONANDO
+   ========================================================= */
 
-/* Remove a área superior ocupada pelo header */
 [data-testid="stHeader"] {
-    display: none;
+    background: transparent;
 }
 
-/* Esconde botão Share */
-[data-testid="stAppDeployButton"] {
-    display: none;
+/* Mantém sempre visível o botão para abrir a barra lateral */
+[data-testid="stSidebarCollapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
-/* Esconde toolbar */
+st.markdown("""
+<style>
+            
+/* =========================================================
+   ESCONDE ELEMENTOS DESNECESSÁRIOS DO STREAMLIT
+   ========================================================= */
+
+/* Toolbar */
 [data-testid="stToolbar"] {
-    display: none;
+    display: none !important;
 }
 
-/* Esconde menu */
+/* Botão Share */
+[data-testid="stAppDeployButton"] {
+    display: none !important;
+}
+
+/* Menu principal */
 #MainMenu {
     visibility: hidden;
 }
 
-/* Esconde elementos de status */
+/* Status */
 [data-testid="stStatusWidget"] {
-    display: none;
-}
-
-/* Esconde botão GitHub quando existir */
-[data-testid="stAppHeader"] {
-    display: none;
-}
-
-/* Remove espaços extras no topo */
-.block-container {
-    padding-top: 2rem;
+    display: none !important;
 }
 
 </style>
 """, unsafe_allow_html=True)
-
 # ============================================================
 # SESSION STATE
 # ============================================================
