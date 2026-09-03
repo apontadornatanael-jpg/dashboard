@@ -1,3 +1,4 @@
+
 import streamlit as st
 import sqlite3
 import pandas as pd
@@ -890,7 +891,7 @@ elif page == "📝 Novo Boletim":
         codes = acts["codigo"].tolist()
 
         with st.form("nova_atividade", clear_on_submit=True):
-            codigo = st.selectbox("Código da atividade", codes)
+            codigo = st.selectbox("Código da atividade", codes, key="nova_atividade_codigo")
             ar = activity_row(codigo)
 
             c1, c2, c3 = st.columns(3)
@@ -1411,7 +1412,8 @@ elif page == "🛠️ Gerenciamento":
                 format_func=lambda x: (
                     f"{df_equipes[df_equipes.id==x].iloc[0]['codigo']} - "
                     f"{df_equipes[df_equipes.id==x].iloc[0]['nome']}"
-                )
+                ),
+                key="gerenciamento_equipe_select"
             )
             equipe = df_equipes[df_equipes["id"] == equipe_id].iloc[0]
 
@@ -1449,7 +1451,8 @@ elif page == "🛠️ Gerenciamento":
             novo_status = st.selectbox(
                 "Novo status",
                 ["Ativa","Inativa"],
-                index=0 if equipe["status"] == "Ativa" else 1
+                index=0 if equipe["status"] == "Ativa" else 1,
+                key="gerenciamento_status_equipe"
             )
             if st.button("💾 Atualizar Status da Equipe", type="primary"):
                 execute(
@@ -1496,7 +1499,8 @@ elif page == "🛠️ Gerenciamento":
                 df_sondas["id"].tolist(),
                 format_func=lambda x: str(
                     df_sondas[df_sondas.id==x].iloc[0]["codigo"]
-                )
+                ),
+                key="gerenciamento_sonda_select"
             )
             sonda = df_sondas[df_sondas["id"] == sonda_id].iloc[0]
 
@@ -1508,7 +1512,8 @@ elif page == "🛠️ Gerenciamento":
                 ].index(sonda["status"])
                 if sonda["status"] in [
                     "Operando","Parada","Manutenção","Inativa"
-                ] else 0
+                ] else 0,
+                key="gerenciamento_status_sonda"
             )
 
             if st.button("💾 Atualizar Status da Sonda", type="primary"):
@@ -1584,7 +1589,8 @@ elif page == "🛠️ Gerenciamento":
                 format_func=lambda x: (
                     f"{df_equipes[df_equipes.id==x].iloc[0]['codigo']} - "
                     f"{df_equipes[df_equipes.id==x].iloc[0]['nome']}"
-                )
+                ),
+                key="boletins_por_equipe_select"
             )
 
             boletins = query("""
@@ -1605,7 +1611,8 @@ elif page == "🛠️ Gerenciamento":
                 boletim_id = st.selectbox(
                     "Abrir boletim",
                     boletins["id"].tolist(),
-                    format_func=lambda x: f"Boletim #{x}"
+                    format_func=lambda x: f"Boletim #{x}",
+                    key="gerenciamento_abrir_boletim_select"
                 )
                 if st.button("📝 Abrir Boletim", type="primary"):
                     abrir_boletim(int(boletim_id))
