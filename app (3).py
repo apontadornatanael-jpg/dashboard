@@ -8,8 +8,14 @@ st.set_page_config(page_title="DDH Campo", page_icon="⛏️", layout="wide")
 DB = "ddh.db"
 
 PAGES = [
-    "🏠 Painel DDH", "📝 Novo Boletim", "📋 Boletins Salvos",
-    "👷 Colaboradores", "👥 Equipes", "🔩 Sondas", "⚙️ Cadastros"
+    "🏠 Painel DDH",
+    "📝 Novo Boletim",
+    "📋 Boletins Salvos",
+    "👷 Colaboradores",
+    "👥 Equipes",
+    "🔩 Sondas",
+    "⚙️ Cadastros",
+    "🛠️ Gerenciamento"
 ]
 
 # ------------------------------------------------------------
@@ -891,3 +897,844 @@ elif page == "⚙️ Cadastros":
                 st.error(
                     "⚠️ Preencha todos os campos da atividade."
                 )
+# ============================================================
+# GERENCIAMENTO
+# ============================================================
+elif page == "🛠️ Gerenciamento":
+
+    st.title("🛠️ GERENCIAMENTO OPERACIONAL")
+
+    st.caption(
+        "Acompanhe equipes, colaboradores, sondas, produção e boletins."
+    )
+
+    # ========================================================
+    # CONSULTAS PRINCIPAIS
+    # ========================================================
+
+    df_equipes = query("""
+        SELECT
+            e.*,
+
+            sup.nome AS supervisor_nome,
+            son.nome AS sondador_nome,
+            aux1.nome AS auxiliar1_nome,
+            aux2.nome AS auxiliar2_nome
+
+        FROM equipes e
+
+        LEFT JOIN colaboradores sup
+            ON sup.id = e.supervisor_id
+
+        LEFT JOIN colaboradores son
+            ON son.id = e.sondador_id
+
+        LEFT JOIN colaboradores aux1
+            ON aux1.id = e.auxiliar1_id
+
+        LEFT JOIN colaboradores aux2
+            ON aux2.id = e.auxiliar2_id
+
+        ORDER BY e.codigo
+    """)
+
+    if df_equipes.empty:
+
+        st.warning(
+            "⚠️ Nenhuma equipe cadastrada."
+        )
+
+        st.stop()
+
+    # ========================================================
+    # RESUMO GERAL
+    # ========================================================
+
+    total_equipes = len(df_equipes)
+
+    equipes_ativas = len(
+        df_equipes[
+            df_equipes["status"] == "Ativa"
+        ]
+    )
+
+    equipes_inativas = len(
+        df_equipes[
+            df_equipes["status"] == "Inativa"
+        ]
+    )
+
+    total_sondas = query(
+        """
+        SELECT COUNT(*) AS total
+        FROM sondas
+        """
+    )
+
+    total_sondas = int(
+        total_sondas.iloc[0]["total"]
+    )
+
+    total_boletins = query(
+        """
+        SELECT COUNT(*) AS total
+        FROM boletins
+        """
+    )
+
+    total_boletins = int(
+        total_boletins.iloc[0]["total"]
+    )
+
+    st.subheader("📊 Resumo Operacional")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "👥 EQUIPES",
+        total_equipes
+    )
+
+    c2.metric(
+        "🟢 EQUIPES ATIVAS",
+        equipes_ativas
+    )
+
+    c3.metric(
+        "🔩 SONDAS",
+        total_sondas
+    )
+
+    c4.metric(
+        "📋 BOLETINS",
+        total_boletins
+    )
+
+    st.divider()
+
+    # ========================================================
+    # TABS
+    # ========================================================
+
+    tab_resumo, tab_equipes, tab_sondas, tab_producao, tab_boletins = st.tabs([
+        "📊 Resumo",
+        "👥 Gerenciar Equipes",
+        "🔩 Sondas",
+        "⛏️ Produção",
+        "📋 Boletins"
+    ])
+
+    # ========================================================
+    # TAB RESUMO
+    # ========================================================
+
+    with tab_resumo:
+
+        st.subheader(
+            "👥 Situação das Equipes"
+        )
+
+        resumo_equipes = df_equipes[
+            [
+                "codigo",
+                "nome",
+                "supervisor_nome",
+                "sondador_nome",
+                "auxiliar1_nome",
+                "auxiliar2_nome",
+                "status"
+            ]
+        ].copy()
+
+        resumo_equipes.columns = [
+            "Código",
+            "Equipe",
+            "Supervisor",
+            "Sondador",
+            "Auxiliar 1",
+            "Auxiliar 2",
+            "Status"
+        ]
+
+        st.dataframe(
+            resumo_equipes,
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.divider()
+
+        st.subheader(
+            "🔩 Sondas por Equipe"
+        )
+
+        sondas_resumo = query("""
+            SELECT
+
+                s.codigo AS sonda,
+                s.modelo,
+                s.fabricante,
+                s.patrimonio,
+                s.status,
+
+                e.codigo AS equipe,
+                e.nome AS nome_equipe
+
+            FROM sondas s
+
+            LEFT JOIN equipes e
+                ON e.id = s.equipe_id
+
+            ORDER BY e.codigo, s.codigo
+        """)
+
+        if sondas_resumo.empty:
+
+            st.info(
+                "Nenhuma sonda cadastrada."
+            )
+
+        else:
+
+            st.dataframe(
+                sondas_resumo,
+                use_container_width=True,
+                hide_index=True
+            )
+
+    # ========================================================
+    # GERENCIAR EQUIPES
+    # ========================================================
+
+    with tab_equipes:
+
+        st.subheader(
+            "👥 Gerenciamento de Equipes"
+        )
+
+        equipe_id = st.selectbox(
+            "Selecione a equipe",
+            df_equipes["id"].tolist(),
+            format_func=lambda x: (
+                f"{df_equipes[df_equipes['id'] == x].iloc[0]['codigo']} - "
+                f"{df_equipes[df_equipes['id'] == x].iloc[0]['nome']}"
+            ),
+            key="gerenciamento_equipe"
+        )
+
+        equipe = df_equipes[
+            df_equipes["id"] == equipe_id
+        ].iloc[0]
+
+        st.divider()
+
+        st.subheader(
+            f"👥 {equipe['codigo']} - {equipe['nome']}"
+        )
+
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric(
+            "Status",
+            equipe["status"]
+        )
+
+        # ----------------------------------------------------
+        # QUANTIDADE DE BOLETINS
+        # ----------------------------------------------------
+
+        boletins_equipe = query("""
+            SELECT COUNT(*) AS total
+            FROM boletins
+            WHERE equipe_id=?
+        """, (
+            int(equipe_id),
+        ))
+
+        total_boletins_equipe = int(
+            boletins_equipe.iloc[0]["total"]
+        )
+
+        c2.metric(
+            "Boletins",
+            total_boletins_equipe
+        )
+
+        # ----------------------------------------------------
+        # QUANTIDADE DE SONDAS
+        # ----------------------------------------------------
+
+        sondas_equipe = query("""
+            SELECT COUNT(*) AS total
+            FROM sondas
+            WHERE equipe_id=?
+        """, (
+            int(equipe_id),
+        ))
+
+        total_sondas_equipe = int(
+            sondas_equipe.iloc[0]["total"]
+        )
+
+        c3.metric(
+            "Sondas",
+            total_sondas_equipe
+        )
+
+        st.divider()
+
+        # ----------------------------------------------------
+        # MEMBROS
+        # ----------------------------------------------------
+
+        st.subheader(
+            "👷 Colaboradores da Equipe"
+        )
+
+        membros = []
+
+        if pd.notna(equipe["supervisor_id"]):
+
+            membros.append({
+                "Função": "Supervisor",
+                "Nome": equipe["supervisor_nome"]
+            })
+
+        if pd.notna(equipe["sondador_id"]):
+
+            membros.append({
+                "Função": "Sondador",
+                "Nome": equipe["sondador_nome"]
+            })
+
+        if pd.notna(equipe["auxiliar1_id"]):
+
+            membros.append({
+                "Função": "Auxiliar 1",
+                "Nome": equipe["auxiliar1_nome"]
+            })
+
+        if pd.notna(equipe["auxiliar2_id"]):
+
+            membros.append({
+                "Função": "Auxiliar 2",
+                "Nome": equipe["auxiliar2_nome"]
+            })
+
+        if membros:
+
+            df_membros = pd.DataFrame(
+                membros
+            )
+
+            st.dataframe(
+                df_membros,
+                use_container_width=True,
+                hide_index=True
+            )
+
+        else:
+
+            st.info(
+                "Nenhum colaborador vinculado."
+            )
+
+        st.divider()
+
+        # ----------------------------------------------------
+        # ALTERAR STATUS
+        # ----------------------------------------------------
+
+        st.subheader(
+            "🔄 Alterar Status da Equipe"
+        )
+
+        novo_status = st.selectbox(
+            "Novo status",
+            [
+                "Ativa",
+                "Inativa"
+            ],
+            index=(
+                0
+                if equipe["status"] == "Ativa"
+                else 1
+            ),
+            key="novo_status_equipe"
+        )
+
+        if st.button(
+            "💾 Atualizar Status",
+            type="primary",
+            use_container_width=True
+        ):
+
+            execute("""
+                UPDATE equipes
+                SET status=?
+                WHERE id=?
+            """, (
+                novo_status,
+                int(equipe_id)
+            ))
+
+            st.success(
+                "✅ Status da equipe atualizado."
+            )
+
+            st.rerun()
+
+        st.divider()
+
+        # ----------------------------------------------------
+        # EXCLUIR EQUIPE
+        # ----------------------------------------------------
+
+        st.subheader(
+            "🗑️ Excluir Equipe"
+        )
+
+        st.warning(
+            "⚠️ A exclusão de uma equipe só será permitida "
+            "se não existirem boletins vinculados."
+        )
+
+        confirmar_equipe = st.checkbox(
+            f"Confirmo que desejo excluir a equipe {equipe['codigo']}",
+            key="confirmar_excluir_equipe"
+        )
+
+        if st.button(
+            "🗑️ EXCLUIR EQUIPE",
+            use_container_width=True
+        ):
+
+            if not confirmar_equipe:
+
+                st.error(
+                    "⚠️ Confirme a exclusão antes de continuar."
+                )
+
+            else:
+
+                boletins = query("""
+                    SELECT COUNT(*) AS total
+                    FROM boletins
+                    WHERE equipe_id=?
+                """, (
+                    int(equipe_id),
+                ))
+
+                total = int(
+                    boletins.iloc[0]["total"]
+                )
+
+                if total > 0:
+
+                    st.error(
+                        f"❌ Não é possível excluir esta equipe. "
+                        f"Existem {total} boletim(ns) vinculados."
+                    )
+
+                else:
+
+                    # DESVINCULA SONDAS
+                    execute("""
+                        UPDATE sondas
+                        SET equipe_id=NULL
+                        WHERE equipe_id=?
+                    """, (
+                        int(equipe_id),
+                    ))
+
+                    delete(
+                        "equipes",
+                        equipe_id
+                    )
+
+                    st.success(
+                        "✅ Equipe excluída com sucesso."
+                    )
+
+                    st.rerun()
+
+    # ========================================================
+    # SONDAS
+    # ========================================================
+
+    with tab_sondas:
+
+        st.subheader(
+            "🔩 Gerenciamento de Sondas"
+        )
+
+        df_sondas = query("""
+            SELECT
+
+                s.id,
+                s.codigo,
+                s.modelo,
+                s.fabricante,
+                s.patrimonio,
+                s.status,
+
+                e.codigo AS equipe,
+                e.nome AS nome_equipe
+
+            FROM sondas s
+
+            LEFT JOIN equipes e
+                ON e.id = s.equipe_id
+
+            ORDER BY s.codigo
+        """)
+
+        if df_sondas.empty:
+
+            st.info(
+                "Nenhuma sonda cadastrada."
+            )
+
+        else:
+
+            st.dataframe(
+                df_sondas,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.divider()
+
+            sonda_id = st.selectbox(
+                "Selecione uma sonda",
+                df_sondas["id"].tolist(),
+                format_func=lambda x: (
+                    f"{df_sondas[df_sondas['id'] == x].iloc[0]['codigo']}"
+                ),
+                key="gerenciamento_sonda"
+            )
+
+            sonda = df_sondas[
+                df_sondas["id"] == sonda_id
+            ].iloc[0]
+
+            st.subheader(
+                f"🔩 {sonda['codigo']}"
+            )
+
+            c1, c2, c3 = st.columns(3)
+
+            c1.metric(
+                "Modelo",
+                sonda["modelo"]
+                if pd.notna(sonda["modelo"])
+                else "-"
+            )
+
+            c2.metric(
+                "Status",
+                sonda["status"]
+            )
+
+            c3.metric(
+                "Equipe",
+                sonda["equipe"]
+                if pd.notna(sonda["equipe"])
+                else "Sem equipe"
+            )
+
+            st.divider()
+
+            # ----------------------------------------------
+            # ALTERAR STATUS SONDA
+            # ----------------------------------------------
+
+            novo_status_sonda = st.selectbox(
+                "Status da sonda",
+                [
+                    "Operando",
+                    "Parada",
+                    "Manutenção",
+                    "Inativa"
+                ],
+                index=[
+                    "Operando",
+                    "Parada",
+                    "Manutenção",
+                    "Inativa"
+                ].index(sonda["status"])
+                if sonda["status"] in [
+                    "Operando",
+                    "Parada",
+                    "Manutenção",
+                    "Inativa"
+                ]
+                else 0,
+                key="status_sonda_gerenciamento"
+            )
+
+            if st.button(
+                "💾 Atualizar Status da Sonda",
+                type="primary",
+                use_container_width=True
+            ):
+
+                execute("""
+                    UPDATE sondas
+                    SET status=?
+                    WHERE id=?
+                """, (
+                    novo_status_sonda,
+                    int(sonda_id)
+                ))
+
+                st.success(
+                    "✅ Status da sonda atualizado."
+                )
+
+                st.rerun()
+
+    # ========================================================
+    # PRODUÇÃO
+    # ========================================================
+
+    with tab_producao:
+
+        st.subheader(
+            "⛏️ Produção por Equipe"
+        )
+
+        producao = query("""
+            SELECT
+
+                e.id,
+                e.codigo AS equipe,
+                e.nome,
+
+                COALESCE(
+                    SUM(
+                        COALESCE(m.ate_m,0)
+                        -
+                        COALESCE(m.de_m,0)
+                    ),
+                    0
+                ) AS metros,
+
+                COALESCE(
+                    SUM(
+                        COALESCE(m.recuperado_m,0)
+                    ),
+                    0
+                ) AS recuperado,
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN a.classificacao =
+                                'OPERAÇÃO DIRETA'
+                            THEN COALESCE(p.horas,0)
+                            ELSE 0
+                        END
+                    ),
+                    0
+                ) AS horas_operacao
+
+            FROM equipes e
+
+            LEFT JOIN boletins b
+                ON b.equipe_id = e.id
+
+            LEFT JOIN manobras m
+                ON m.boletim_id = b.id
+
+            LEFT JOIN apontamentos p
+                ON p.boletim_id = b.id
+
+            LEFT JOIN atividades a
+                ON a.codigo = p.codigo_atividade
+
+            GROUP BY
+                e.id,
+                e.codigo,
+                e.nome
+
+            ORDER BY metros DESC
+        """)
+
+        if producao.empty:
+
+            st.info(
+                "Nenhuma produção registrada."
+            )
+
+        else:
+
+            producao["Recuperação %"] = (
+                producao["recuperado"]
+                /
+                producao["metros"].replace(
+                    0,
+                    pd.NA
+                )
+                *
+                100
+            ).fillna(0)
+
+            producao["ROP (m/h)"] = (
+                producao["metros"]
+                /
+                producao["horas_operacao"].replace(
+                    0,
+                    pd.NA
+                )
+            ).fillna(0)
+
+            mostrar = producao[
+                [
+                    "equipe",
+                    "nome",
+                    "metros",
+                    "recuperado",
+                    "Recuperação %",
+                    "horas_operacao",
+                    "ROP (m/h)"
+                ]
+            ].copy()
+
+            mostrar.columns = [
+                "Equipe",
+                "Nome",
+                "Metros",
+                "Recuperado",
+                "Recuperação %",
+                "Horas Operação",
+                "ROP (m/h)"
+            ]
+
+            st.dataframe(
+                mostrar.round(2),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.divider()
+
+            st.subheader(
+                "📊 Produção das Equipes"
+            )
+
+            st.bar_chart(
+                mostrar[
+                    [
+                        "Equipe",
+                        "Metros"
+                    ]
+                ].set_index(
+                    "Equipe"
+                )
+            )
+
+            st.subheader(
+                "⚡ ROP das Equipes"
+            )
+
+            st.bar_chart(
+                mostrar[
+                    [
+                        "Equipe",
+                        "ROP (m/h)"
+                    ]
+                ].set_index(
+                    "Equipe"
+                )
+            )
+
+    # ========================================================
+    # BOLETINS POR EQUIPE
+    # ========================================================
+
+    with tab_boletins:
+
+        st.subheader(
+            "📋 Boletins por Equipe"
+        )
+
+        equipe_boletim_id = st.selectbox(
+            "Selecione a equipe",
+            df_equipes["id"].tolist(),
+            format_func=lambda x: (
+                f"{df_equipes[df_equipes['id'] == x].iloc[0]['codigo']} - "
+                f"{df_equipes[df_equipes['id'] == x].iloc[0]['nome']}"
+            ),
+            key="boletins_por_equipe"
+        )
+
+        boletins = query("""
+            SELECT
+
+                b.id,
+                b.data,
+                b.turno,
+                b.projeto,
+                b.cliente,
+
+                s.codigo AS sonda,
+                f.identificacao AS furo,
+
+                b.horimetro_inicial,
+                b.horimetro_final,
+                b.observacoes
+
+            FROM boletins b
+
+            LEFT JOIN sondas s
+                ON s.id = b.sonda_id
+
+            LEFT JOIN furos f
+                ON f.id = b.furo_id
+
+            WHERE b.equipe_id=?
+
+            ORDER BY
+                b.data DESC,
+                b.id DESC
+        """, (
+            int(equipe_boletim_id),
+        ))
+
+        if boletins.empty:
+
+            st.info(
+                "Nenhum boletim encontrado para esta equipe."
+            )
+
+        else:
+
+            st.dataframe(
+                boletins,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.divider()
+
+            boletim_id = st.selectbox(
+                "Abrir boletim",
+                boletins["id"].tolist(),
+                format_func=lambda x: (
+                    f"Boletim #{x}"
+                ),
+                key="abrir_boletim_gerenciamento"
+            )
+
+            if st.button(
+                "📝 Abrir Boletim",
+                type="primary",
+                use_container_width=True
+            ):
+
+                abrir_boletim(
+                    int(boletim_id)
+                )
+
+                st.rerun()
