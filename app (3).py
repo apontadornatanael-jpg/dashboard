@@ -25,6 +25,52 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown("""
+<style>
+
+/* Esconde o cabeçalho padrão do Streamlit */
+header {
+    visibility: hidden;
+}
+
+/* Remove a área superior ocupada pelo header */
+[data-testid="stHeader"] {
+    display: none;
+}
+
+/* Esconde botão Share */
+[data-testid="stAppDeployButton"] {
+    display: none;
+}
+
+/* Esconde toolbar */
+[data-testid="stToolbar"] {
+    display: none;
+}
+
+/* Esconde menu */
+#MainMenu {
+    visibility: hidden;
+}
+
+/* Esconde elementos de status */
+[data-testid="stStatusWidget"] {
+    display: none;
+}
+
+/* Esconde botão GitHub quando existir */
+[data-testid="stAppHeader"] {
+    display: none;
+}
+
+/* Remove espaços extras no topo */
+.block-container {
+    padding-top: 2rem;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 # ============================================================
 # SESSION STATE
 # ============================================================
