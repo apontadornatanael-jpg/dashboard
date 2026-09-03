@@ -1,4 +1,3 @@
-
 import streamlit as st
 import sqlite3
 import pandas as pd
@@ -40,6 +39,7 @@ for k, v in DEFAULT_SESSION.items():
 PAGES_ADMIN = [
     "🏠 Painel DDH",
     "📝 Novo Boletim",
+    "📅 Produção Diária",
     "📋 Boletins Salvos",
     "👷 Colaboradores",
     "👥 Equipes",
@@ -52,6 +52,7 @@ PAGES_ADMIN = [
 PAGES_SUPERVISOR = [
     "🏠 Painel DDH",
     "📝 Novo Boletim",
+    "📅 Produção Diária",
     "📋 Boletins Salvos",
     "👷 Colaboradores",
     "👥 Equipes",
@@ -968,6 +969,103 @@ elif page == "📝 Novo Boletim":
         if c2.button("➕ Novo Boletim", use_container_width=True):
             st.session_state.boletim_edit_id = None
             st.rerun()
+
+# ============================================================
+# PRODUÇÃO DIÁRIA
+# ============================================================
+elif page == "📅 Produção Diária":
+    st.title("📅 PRODUÇÃO DIÁRIA")
+    st.caption("A produção é atualizada automaticamente conforme as manobras são lançadas nos boletins.")
+
+    datas = query("SELECT DISTINCT data FROM boletins ORDER BY data DESC")
+    if datas.empty:
+        st.info("Nenhuma produção registrada ainda.")
+    else:
+        opcoes_datas = pd.to_datetime(datas["data"], errors="coerce").dt.date.dropna().tolist()
+        data_padrao = date.today() if date.today() in opcoes_datas else opcoes_datas[0]
+        data_filtro = st.date_input("📅 Selecione a data", value=data_padrao, key="producao_diaria_data")
+
+        diaria = query("""
+            SELECT
+                b.data,
+                e.codigo AS equipe,
+                e.nome AS nome_equipe,
+                s.codigo AS sonda,
+                f.identificacao AS furo,
+                COALESCE(SUM(COALESCE(m.ate_m,0) - COALESCE(m.de_m,0)),0) AS metros,
+                COALESCE(SUM(COALESCE(m.recuperado_m,0)),0) AS recuperado
+            FROM boletins b
+            LEFT JOIN equipes e ON e.id=b.equipe_id
+            LEFT JOIN sondas s ON s.id=b.sonda_id
+            LEFT JOIN furos f ON f.id=b.furo_id
+            LEFT JOIN manobras m ON m.boletim_id=b.id
+            WHERE b.data=?
+            GROUP BY b.id, b.data, e.codigo, e.nome, s.codigo, f.identificacao
+            ORDER BY metros DESC, e.codigo
+        """, (str(data_filtro),))
+
+        horas = query("""
+            SELECT b.id AS boletim_id,
+                   COALESCE(SUM(CASE WHEN a.classificacao='OPERAÇÃO DIRETA'
+                       THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_operacao
+            FROM boletins b
+            LEFT JOIN apontamentos p ON p.boletim_id=b.id
+            LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+            WHERE b.data=?
+            GROUP BY b.id
+        """, (str(data_filtro),))
+
+        boletim_ids = query("SELECT id FROM boletins WHERE data=?", (str(data_filtro),))
+        if diaria.empty:
+            st.warning("Nenhuma manobra registrada para esta data.")
+        else:
+            # Horas agregadas por equipe/sonda/furo não são necessárias para a produção em metros.
+            diaria["Recuperação %"] = (diaria["recuperado"] / diaria["metros"].replace(0, pd.NA) * 100).fillna(0)
+
+            total_metros = float(diaria["metros"].sum())
+            total_recuperado = float(diaria["recuperado"].sum())
+            total_equipes = int(diaria["equipe"].nunique())
+            total_sondas = int(diaria["sonda"].nunique())
+            rec_total = total_recuperado / total_metros * 100 if total_metros else 0
+
+            c1,c2,c3,c4 = st.columns(4)
+            c1.metric("⛏️ METROS DO DIA", f"{total_metros:.2f} m")
+            c2.metric("👥 EQUIPES PRODUZINDO", total_equipes)
+            c3.metric("🔩 SONDAS ATIVAS", total_sondas)
+            c4.metric("🧪 RECUPERAÇÃO MÉDIA", f"{rec_total:.1f}%")
+
+            st.divider()
+            st.subheader("👥 Produção por Equipe")
+            por_equipe = diaria.groupby(["equipe","nome_equipe"], dropna=False, as_index=False).agg(
+                Metros=("metros","sum"), Recuperado=("recuperado","sum")
+            )
+            por_equipe["Recuperação %"] = (por_equipe["Recuperado"] / por_equipe["Metros"].replace(0,pd.NA)*100).fillna(0)
+            por_equipe = por_equipe.sort_values("Metros", ascending=False)
+            st.dataframe(por_equipe.round(2), use_container_width=True, hide_index=True)
+            st.bar_chart(por_equipe.set_index("equipe")[["Metros"]])
+
+            st.divider()
+            st.subheader("📋 Detalhamento dos Boletins do Dia")
+            detalhe = diaria[["data","equipe","nome_equipe","sonda","furo","metros","recuperado","Recuperação %"]].copy()
+            detalhe.columns = ["Data","Equipe","Nome da Equipe","Sonda","Furo","Metros","Recuperado","Recuperação %"]
+            st.dataframe(detalhe.round(2), use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.subheader("📈 Produção diária recente")
+            historico = query("""
+                SELECT b.data, e.codigo AS equipe,
+                       COALESCE(SUM(COALESCE(m.ate_m,0)-COALESCE(m.de_m,0)),0) AS metros
+                FROM boletins b
+                LEFT JOIN equipes e ON e.id=b.equipe_id
+                LEFT JOIN manobras m ON m.boletim_id=b.id
+                GROUP BY b.data, e.codigo
+                ORDER BY b.data DESC
+                LIMIT 500
+            """)
+            if not historico.empty:
+                historico["data"] = pd.to_datetime(historico["data"], errors="coerce")
+                grafico = historico.pivot_table(index="data", columns="equipe", values="metros", aggfunc="sum").fillna(0).sort_index()
+                st.line_chart(grafico)
 
 # ============================================================
 # BOLETINS SALVOS
