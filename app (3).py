@@ -28,13 +28,12 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* Mantém o cabeçalho do Streamlit para permitir
-   abrir novamente a barra lateral */
+/* Mantém o cabeçalho para permitir abrir a barra lateral */
 [data-testid="stHeader"] {
     background: transparent;
 }
 
-/* Mantém visível o botão para abrir a barra lateral */
+/* Mantém visível o botão de abrir o menu lateral */
 [data-testid="stSidebarCollapsedControl"] {
     display: flex !important;
     visibility: visible !important;
