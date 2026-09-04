@@ -530,7 +530,6 @@ def init_db():
         sondador_id INTEGER,
         auxiliar1_id INTEGER,
         auxiliar2_id INTEGER,
-        auxiliar3_id INTEGER,
         status TEXT DEFAULT 'Ativa'
     )""")
 
@@ -618,11 +617,6 @@ def init_db():
         status TEXT DEFAULT 'Ativo',
         criado_em TEXT
     )""")
-
-    # Migração automática: adiciona Auxiliar 3 aos bancos já existentes.
-    colunas_equipes = [r[1] for r in cur.execute("PRAGMA table_info(equipes)").fetchall()]
-    if "auxiliar3_id" not in colunas_equipes:
-        cur.execute("ALTER TABLE equipes ADD COLUMN auxiliar3_id INTEGER")
 
     c.commit()
     c.close()
@@ -1748,8 +1742,8 @@ elif page == "👷 Colaboradores":
             if st.button("🗑️ Excluir colaborador"):
                 refs = query("""
                     SELECT
-                    (SELECT COUNT(*) FROM equipes WHERE supervisor_id=? OR sondador_id=? OR auxiliar1_id=? OR auxiliar2_id=? OR auxiliar3_id=?) total
-                """, (idx, idx, idx, idx, idx))
+                    (SELECT COUNT(*) FROM equipes WHERE supervisor_id=? OR sondador_id=? OR auxiliar1_id=? OR auxiliar2_id=?) total
+                """, (idx, idx, idx, idx))
                 if int(refs.iloc[0]["total"]) > 0:
                     st.error("Não é possível excluir: colaborador vinculado a uma equipe.")
                 else:
@@ -1806,7 +1800,6 @@ elif page == "👥 Equipes":
             a1, a2 = st.columns(2)
             aux1 = a1.selectbox("Auxiliar 1", opts, format_func=fmt_colaborador)
             aux2 = a2.selectbox("Auxiliar 2", opts, format_func=fmt_colaborador)
-            aux3 = st.selectbox("Auxiliar 3", opts, format_func=fmt_colaborador)
             status = st.selectbox("Status", ["Ativa","Inativa"])
             salvar = st.form_submit_button("Cadastrar equipe", type="primary")
 
@@ -1816,12 +1809,12 @@ elif page == "👥 Equipes":
                     execute("""
                         INSERT INTO equipes(
                             codigo,nome,supervisor_id,sondador_id,
-                            auxiliar1_id,auxiliar2_id,auxiliar3_id,status
+                            auxiliar1_id,auxiliar2_id,status
                         )
-                        VALUES(?,?,?,?,?,?,?,?)
+                        VALUES(?,?,?,?,?,?,?)
                     """, (
                         codigo.strip(), nome.strip(), supervisor,
-                        sondador, aux1, aux2, aux3, status
+                        sondador, aux1, aux2, status
                     ))
                     st.success("Equipe cadastrada.")
                     st.rerun()
@@ -1887,16 +1880,66 @@ elif page == "🔩 Sondas":
                 st.error("Informe o código.")
 
         st.divider()
-        st.dataframe(
-            query("""
-                SELECT s.*,e.codigo equipe
-                FROM sondas s
-                LEFT JOIN equipes e ON e.id=s.equipe_id
-                ORDER BY s.codigo
-            """),
-            use_container_width=True,
-            hide_index=True
-        )
+        st.subheader("📋 Sondas cadastradas")
+        df_sondas = query("""
+            SELECT s.*, e.codigo AS equipe
+            FROM sondas s
+            LEFT JOIN equipes e ON e.id=s.equipe_id
+            ORDER BY s.codigo
+        """)
+
+        if df_sondas.empty:
+            st.info("Nenhuma sonda cadastrada.")
+        else:
+            st.dataframe(
+                df_sondas,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.divider()
+            st.subheader("🗑️ Excluir sonda")
+
+            sonda_id_excluir = st.selectbox(
+                "Selecione a sonda que deseja excluir",
+                df_sondas["id"].tolist(),
+                format_func=lambda x: (
+                    f"{df_sondas[df_sondas['id'] == x].iloc[0]['codigo']}"
+                    f" - {df_sondas[df_sondas['id'] == x].iloc[0]['modelo']}"
+                ),
+                key="sonda_excluir_select"
+            )
+
+            sonda_sel = df_sondas[df_sondas["id"] == sonda_id_excluir].iloc[0]
+            confirmar_exclusao_sonda = st.checkbox(
+                f"Confirmo que desejo excluir a sonda {sonda_sel['codigo']}",
+                key="confirmar_exclusao_sonda"
+            )
+
+            if st.button(
+                "🗑️ EXCLUIR SONDA",
+                type="secondary",
+                use_container_width=False,
+                key="botao_excluir_sonda"
+            ):
+                if not confirmar_exclusao_sonda:
+                    st.error("Confirme a exclusão antes de continuar.")
+                else:
+                    boletins_vinculados = query(
+                        "SELECT COUNT(*) AS total FROM boletins WHERE sonda_id=?",
+                        (int(sonda_id_excluir),)
+                    )
+                    total_boletins = int(boletins_vinculados.iloc[0]["total"])
+
+                    if total_boletins > 0:
+                        st.error(
+                            f"Não é possível excluir esta sonda porque existem "
+                            f"{total_boletins} boletim(ns) vinculados a ela."
+                        )
+                    else:
+                        delete("sondas", int(sonda_id_excluir))
+                        st.success(f"Sonda {sonda_sel['codigo']} excluída com sucesso.")
+                        st.rerun()
 
 # ============================================================
 # CADASTROS
@@ -2133,14 +2176,12 @@ elif page == "🛠️ Gerenciamento":
                sup.nome AS supervisor_nome,
                son.nome AS sondador_nome,
                aux1.nome AS auxiliar1_nome,
-               aux2.nome AS auxiliar2_nome,
-               aux3.nome AS auxiliar3_nome
+               aux2.nome AS auxiliar2_nome
         FROM equipes e
         LEFT JOIN colaboradores sup ON sup.id=e.supervisor_id
         LEFT JOIN colaboradores son ON son.id=e.sondador_id
         LEFT JOIN colaboradores aux1 ON aux1.id=e.auxiliar1_id
         LEFT JOIN colaboradores aux2 ON aux2.id=e.auxiliar2_id
-        LEFT JOIN colaboradores aux3 ON aux3.id=e.auxiliar3_id
         ORDER BY e.codigo
     """)
 
@@ -2168,12 +2209,12 @@ elif page == "🛠️ Gerenciamento":
             resumo = df_equipes[
                 [
                     "codigo","nome","supervisor_nome","sondador_nome",
-                    "auxiliar1_nome","auxiliar2_nome","auxiliar3_nome","status"
+                    "auxiliar1_nome","auxiliar2_nome","status"
                 ]
             ].copy()
             resumo.columns = [
                 "Código","Equipe","Supervisor","Sondador",
-                "Auxiliar 1","Auxiliar 2","Auxiliar 3","Status"
+                "Auxiliar 1","Auxiliar 2","Status"
             ]
             st.dataframe(resumo, use_container_width=True, hide_index=True)
 
@@ -2223,7 +2264,6 @@ elif page == "🛠️ Gerenciamento":
                 ("sondador_id","Sondador","sondador_nome"),
                 ("auxiliar1_id","Auxiliar 1","auxiliar1_nome"),
                 ("auxiliar2_id","Auxiliar 2","auxiliar2_nome"),
-                ("auxiliar3_id","Auxiliar 3","auxiliar3_nome"),
             ]:
                 if pd.notna(equipe[campo]):
                     membros.append({
