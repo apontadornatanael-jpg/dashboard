@@ -29,100 +29,106 @@ st.markdown("""
 <style>
 
 /* =========================================================
-   PALETA DE CORES - MARROM CLARO / BEGE
+   PALETA DE CORES - MARROM CLARO / CINZA CLARO
    ========================================================= */
 
 /* Fundo principal */
 [data-testid="stAppViewContainer"] {
-    background-color: #F5EFE6 !important;
+    background-color: #F5F3EF !important;
 }
 
 /* Área principal */
 .main {
-    background-color: #F5EFE6 !important;
+    background-color: #F5F3EF !important;
 }
 
 /* Container principal */
 .block-container {
     padding-top: 2rem;
-    background-color: #F5EFE6 !important;
+    background-color: #F5F3EF !important;
 }
 
+
 /* =========================================================
-   BARRA LATERAL
+   BARRA LATERAL - CINZA CLARO
    ========================================================= */
 
 [data-testid="stSidebar"] {
-    background-color: #D8C3A5 !important;
+    background-color: #D6D3CE !important;
 }
 
 [data-testid="stSidebar"] > div:first-child {
-    background-color: #D8C3A5 !important;
+    background-color: #D6D3CE !important;
 }
 
 /* Texto da barra lateral */
 [data-testid="stSidebar"] * {
-    color: #3E2C23 !important;
+    color: #4A4540 !important;
 }
+
 
 /* =========================================================
    TÍTULOS
    ========================================================= */
 
 h1, h2, h3 {
-    color: #5C4033 !important;
+    color: #6F5A4A !important;
     font-weight: 700 !important;
 }
+
 
 /* =========================================================
    MÉTRICAS
    ========================================================= */
 
 [data-testid="stMetric"] {
-    background-color: #FFF9F0 !important;
-    border: 1px solid #C8A27A !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #B89572 !important;
     border-radius: 12px !important;
     padding: 15px !important;
-    box-shadow: 0 2px 6px rgba(92, 64, 51, 0.10) !important;
+    box-shadow: 0 2px 6px rgba(90, 80, 70, 0.10) !important;
 }
 
 [data-testid="stMetricLabel"] {
-    color: #6B4F3A !important;
+    color: #6E6761 !important;
 }
 
 [data-testid="stMetricValue"] {
-    color: #5C4033 !important;
+    color: #5F554D !important;
     font-weight: 700 !important;
 }
+
 
 /* =========================================================
    BOTÕES
    ========================================================= */
 
 .stButton > button {
-    background-color: #9A6B45 !important;
-    color: white !important;
+    background-color: #B89572 !important;
+    color: #FFFFFF !important;
     border: none !important;
     border-radius: 8px !important;
     font-weight: 600 !important;
 }
 
 .stButton > button:hover {
-    background-color: #7A5134 !important;
-    color: white !important;
+    background-color: #A98260 !important;
+    color: #FFFFFF !important;
     border: none !important;
 }
 
 /* Botão principal */
+
 [data-testid="stBaseButton-primary"] {
-    background-color: #8B5E3C !important;
-    color: white !important;
+    background-color: #9C7B63 !important;
+    color: #FFFFFF !important;
 }
 
 [data-testid="stBaseButton-primary"]:hover {
-    background-color: #6F452C !important;
-    color: white !important;
+    background-color: #856653 !important;
+    color: #FFFFFF !important;
 }
+
 
 /* =========================================================
    INPUTS
@@ -133,63 +139,69 @@ h1, h2, h3 {
 .stDateInput input,
 .stTimeInput input,
 .stTextArea textarea {
-    background-color: #FFFDF9 !important;
-    color: #3E2C23 !important;
-    border: 1px solid #C8A27A !important;
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+    border: 1px solid #C9C6C1 !important;
     border-radius: 7px !important;
 }
+
 
 /* =========================================================
    SELECTBOX
    ========================================================= */
 
 [data-baseweb="select"] > div {
-    background-color: #FFFDF9 !important;
-    color: #3E2C23 !important;
-    border-color: #C8A27A !important;
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+    border-color: #C9C6C1 !important;
 }
+
 
 /* =========================================================
    DATAFRAMES E TABELAS
    ========================================================= */
 
 [data-testid="stDataFrame"] {
-    border: 1px solid #C8A27A !important;
+    border: 1px solid #C9C6C1 !important;
     border-radius: 8px !important;
     overflow: hidden !important;
 }
+
 
 /* =========================================================
    EXPANDERS
    ========================================================= */
 
 [data-testid="stExpander"] {
-    background-color: #FFF9F0 !important;
-    border: 1px solid #C8A27A !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #C9C6C1 !important;
     border-radius: 8px !important;
 }
+
 
 /* =========================================================
    ABAS
    ========================================================= */
 
 button[data-baseweb="tab"] {
-    color: #6B4F3A !important;
+    color: #6E6761 !important;
     font-weight: 600 !important;
 }
 
 button[data-baseweb="tab"][aria-selected="true"] {
-    color: #5C4033 !important;
-    border-bottom-color: #8B5E3C !important;
+    color: #5F554D !important;
+    border-bottom-color: #B89572 !important;
 }
+
 
 /* =========================================================
    DIVISORES
    ========================================================= */
 
 hr {
-    border-color: #D8C3A5 !important;
+    border-color: #D6D3CE !important;
 }
+
 
 /* =========================================================
    ALERTAS
@@ -199,20 +211,24 @@ hr {
     border-radius: 8px !important;
 }
 
+
 /* =========================================================
    HEADER DO STREAMLIT
    ========================================================= */
 
-/* Mantém o cabeçalho do Streamlit ativo */
 header[data-testid="stHeader"] {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
-    background: #F5EFE6 !important;
+    background: #F5F3EF !important;
     z-index: 999999 !important;
 }
 
-/* Mantém sempre visível o controle para reabrir sidebar */
+
+/* =========================================================
+   CONTROLE PARA REABRIR SIDEBAR
+   ========================================================= */
+
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="collapsedControl"] {
     display: flex !important;
@@ -221,47 +237,53 @@ header[data-testid="stHeader"] {
     z-index: 9999999 !important;
 }
 
-/* Esconde botões extras do Streamlit */
+
+/* =========================================================
+   ESCONDE BOTÕES EXTRAS DO STREAMLIT
+   ========================================================= */
+
 [data-testid="stToolbarActions"] {
     display: none !important;
 }
 
-/* Esconde Share */
 [data-testid="stAppDeployButton"] {
     display: none !important;
 }
 
-/* Esconde menu principal */
 #MainMenu {
     display: none !important;
 }
 
-/* Esconde status */
 [data-testid="stStatusWidget"] {
     display: none !important;
 }
+
 
 /* =========================================================
    RADIO MENU LATERAL
    ========================================================= */
 
 [data-testid="stSidebar"] [role="radiogroup"] label {
-    background-color: rgba(255,255,255,0.35) !important;
+    background-color: rgba(255,255,255,0.55) !important;
     border-radius: 7px !important;
     padding: 6px 8px !important;
     margin-bottom: 3px !important;
+    color: #4A4540 !important;
 }
 
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-    background-color: #B99A7A !important;
+    background-color: #BFC0C0 !important;
 }
+
 
 /* =========================================================
    CAPTIONS E TEXTOS
    ========================================================= */
 
-p, span, label {
-    color: #4A3529;
+p,
+span,
+label {
+    color: #4A4540 !important;
 }
 
 </style>
