@@ -25,6 +25,378 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+st.markdown("""
+<style>
+
+/* =========================================================
+   PALETA DE CORES - MARROM CLARO / CINZA CLARO
+   ========================================================= */
+
+/* Fundo principal */
+[data-testid="stAppViewContainer"] {
+    background-color: #F5F3EF !important;
+}
+
+/* Área principal */
+.main {
+    background-color: #F5F3EF !important;
+}
+
+/* Container principal */
+.block-container {
+    padding-top: 2rem;
+    background-color: #F5F3EF !important;
+}
+
+
+/* =========================================================
+   BARRA LATERAL - CINZA CLARO
+   ========================================================= */
+
+[data-testid="stSidebar"] {
+    background-color: #D6D3CE !important;
+}
+
+[data-testid="stSidebar"] > div:first-child {
+    background-color: #D6D3CE !important;
+}
+
+/* Texto da barra lateral */
+[data-testid="stSidebar"] * {
+    color: #4A4540 !important;
+}
+
+
+/* =========================================================
+   TÍTULOS
+   ========================================================= */
+
+h1, h2, h3 {
+    color: #6F5A4A !important;
+    font-weight: 700 !important;
+}
+
+
+/* =========================================================
+   MÉTRICAS
+   ========================================================= */
+
+[data-testid="stMetric"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid #B89572 !important;
+    border-radius: 12px !important;
+    padding: 15px !important;
+    box-shadow: 0 2px 6px rgba(90, 80, 70, 0.10) !important;
+}
+
+[data-testid="stMetricLabel"] {
+    color: #6E6761 !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #5F554D !important;
+    font-weight: 700 !important;
+}
+
+
+/* =========================================================
+   BOTÕES
+   ========================================================= */
+
+.stButton > button {
+    background-color: #B89572 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+}
+
+.stButton > button:hover {
+    background-color: #A98260 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+}
+
+/* Botão principal */
+
+[data-testid="stBaseButton-primary"] {
+    background-color: #9C7B63 !important;
+    color: #FFFFFF !important;
+}
+
+[data-testid="stBaseButton-primary"]:hover {
+    background-color: #856653 !important;
+    color: #FFFFFF !important;
+}
+
+
+/* =========================================================
+   INPUTS
+   ========================================================= */
+
+.stTextInput input,
+.stNumberInput input,
+.stDateInput input,
+.stTimeInput input,
+.stTextArea textarea {
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 7px !important;
+}
+
+
+/* =========================================================
+   SELECTBOX
+   ========================================================= */
+
+[data-baseweb="select"] > div {
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+    border-color: #C9C6C1 !important;
+}
+
+
+/* =========================================================
+   DATAFRAMES E TABELAS - CINZA CLARO
+   ========================================================= */
+
+/* Container externo */
+[data-testid="stDataFrame"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+/* Todos os containers internos */
+[data-testid="stDataFrame"] > div,
+[data-testid="stDataFrame"] .stDataFrame {
+    background-color: #FFFFFF !important;
+}
+
+/* AG GRID - Container principal */
+[data-testid="stDataFrame"] .ag-root-wrapper {
+    background-color: #FFFFFF !important;
+    border: none !important;
+}
+
+/* Fundo geral da tabela */
+[data-testid="stDataFrame"] .ag-root,
+[data-testid="stDataFrame"] .ag-root-wrapper-body,
+[data-testid="stDataFrame"] .ag-body,
+[data-testid="stDataFrame"] .ag-body-viewport,
+[data-testid="stDataFrame"] .ag-center-cols-viewport,
+[data-testid="stDataFrame"] .ag-center-cols-container {
+    background-color: #FFFFFF !important;
+}
+
+/* Cabeçalho */
+[data-testid="stDataFrame"] .ag-header,
+[data-testid="stDataFrame"] .ag-header-viewport,
+[data-testid="stDataFrame"] .ag-header-container {
+    background-color: #D6D3CE !important;
+    border-bottom: 1px solid #BFC0C0 !important;
+}
+
+/* Células do cabeçalho */
+[data-testid="stDataFrame"] .ag-header-cell,
+[data-testid="stDataFrame"] .ag-header-group-cell {
+    background-color: #D6D3CE !important;
+    color: #4A4540 !important;
+    font-weight: 700 !important;
+}
+
+/* Texto do cabeçalho */
+[data-testid="stDataFrame"] .ag-header-cell-text,
+[data-testid="stDataFrame"] .ag-header-group-text {
+    color: #4A4540 !important;
+    font-weight: 700 !important;
+}
+
+/* Linhas */
+[data-testid="stDataFrame"] .ag-row {
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+    border-bottom: 1px solid #E2E0DD !important;
+}
+
+/* Linhas alternadas */
+[data-testid="stDataFrame"] .ag-row-even {
+    background-color: #F5F3EF !important;
+}
+
+/* Células */
+[data-testid="stDataFrame"] .ag-cell {
+    background-color: transparent !important;
+    color: #4A4540 !important;
+    border-right: 1px solid #E2E0DD !important;
+}
+
+/* Hover nas linhas */
+[data-testid="stDataFrame"] .ag-row:hover,
+[data-testid="stDataFrame"] .ag-row-hover {
+    background-color: #E8E5E0 !important;
+}
+
+/* Linha selecionada */
+[data-testid="stDataFrame"] .ag-row-selected {
+    background-color: #E1DDD7 !important;
+}
+
+/* Área esquerda/direita */
+[data-testid="stDataFrame"] .ag-pinned-left-cols-container,
+[data-testid="stDataFrame"] .ag-pinned-right-cols-container {
+    background-color: #FFFFFF !important;
+}
+
+/* Rodapé */
+[data-testid="stDataFrame"] .ag-status-bar {
+    background-color: #F5F3EF !important;
+    color: #4A4540 !important;
+}
+
+/* Menu e popups internos */
+[data-testid="stDataFrame"] .ag-menu,
+[data-testid="stDataFrame"] .ag-popup,
+.ag-theme-streamlit .ag-menu {
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+}
+
+/* Barras de rolagem */
+[data-testid="stDataFrame"] .ag-body-horizontal-scroll,
+[data-testid="stDataFrame"] .ag-body-vertical-scroll {
+    background-color: #F5F3EF !important;
+}
+
+/* Texto geral da tabela */
+[data-testid="stDataFrame"] * {
+    color: #4A4540 !important;
+}
+
+
+/* =========================================================
+   EXPANDERS
+   ========================================================= */
+
+[data-testid="stExpander"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 8px !important;
+}
+
+
+/* =========================================================
+   ABAS
+   ========================================================= */
+
+button[data-baseweb="tab"] {
+    color: #6E6761 !important;
+    font-weight: 600 !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #5F554D !important;
+    border-bottom-color: #B89572 !important;
+}
+
+
+/* =========================================================
+   DIVISORES
+   ========================================================= */
+
+hr {
+    border-color: #D6D3CE !important;
+}
+
+
+/* =========================================================
+   ALERTAS
+   ========================================================= */
+
+[data-testid="stAlert"] {
+    border-radius: 8px !important;
+}
+
+
+/* =========================================================
+   HEADER DO STREAMLIT
+   ========================================================= */
+
+header[data-testid="stHeader"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background: #F5F3EF !important;
+    z-index: 999999 !important;
+}
+
+
+/* =========================================================
+   CONTROLE PARA REABRIR SIDEBAR
+   ========================================================= */
+
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 9999999 !important;
+}
+
+
+/* =========================================================
+   ESCONDE BOTÕES EXTRAS DO STREAMLIT
+   ========================================================= */
+
+[data-testid="stToolbarActions"] {
+    display: none !important;
+}
+
+[data-testid="stAppDeployButton"] {
+    display: none !important;
+}
+
+#MainMenu {
+    display: none !important;
+}
+
+[data-testid="stStatusWidget"] {
+    display: none !important;
+}
+
+
+/* =========================================================
+   RADIO MENU LATERAL
+   ========================================================= */
+
+[data-testid="stSidebar"] [role="radiogroup"] label {
+    background-color: rgba(255,255,255,0.55) !important;
+    border-radius: 7px !important;
+    padding: 6px 8px !important;
+    margin-bottom: 3px !important;
+    color: #4A4540 !important;
+}
+
+[data-testid="stSidebar"] [role="radiogroup"] label:hover {
+    background-color: #BFC0C0 !important;
+}
+
+
+/* =========================================================
+   CAPTIONS E TEXTOS
+   ========================================================= */
+
+p,
+span,
+label {
+    color: #4A4540 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 
 # ============================================================
 # SESSION STATE
