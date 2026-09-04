@@ -158,58 +158,62 @@ h1, h2, h3 {
 
 
 /* =========================================================
-   DATAFRAMES E TABELAS - CINZA CLARO
+   DATAFRAMES E TABELAS - FORÇAR TEMA CLARO
    ========================================================= */
 
-/* Container externo */
+/* Container principal */
 [data-testid="stDataFrame"] {
-    background-color: #FFFFFF !important;
+    background: #FFFFFF !important;
+    color: #4A4540 !important;
     border: 1px solid #C9C6C1 !important;
     border-radius: 8px !important;
     overflow: hidden !important;
 }
 
-/* Todos os containers internos */
-[data-testid="stDataFrame"] > div,
-[data-testid="stDataFrame"] .stDataFrame {
-    background-color: #FFFFFF !important;
+/* Todos os elementos internos */
+[data-testid="stDataFrame"],
+[data-testid="stDataFrame"] *,
+.stDataFrame,
+.stDataFrame * {
+    color: #4A4540 !important;
 }
 
-/* AG GRID - Container principal */
-[data-testid="stDataFrame"] .ag-root-wrapper {
-    background-color: #FFFFFF !important;
-    border: none !important;
+/* Containers internos */
+[data-testid="stDataFrame"] div,
+.stDataFrame div {
+    background-color: transparent !important;
 }
 
-/* Fundo geral da tabela */
+/* AG GRID - fundo geral */
+[data-testid="stDataFrame"] .ag-root-wrapper,
 [data-testid="stDataFrame"] .ag-root,
 [data-testid="stDataFrame"] .ag-root-wrapper-body,
 [data-testid="stDataFrame"] .ag-body,
 [data-testid="stDataFrame"] .ag-body-viewport,
 [data-testid="stDataFrame"] .ag-center-cols-viewport,
-[data-testid="stDataFrame"] .ag-center-cols-container {
+[data-testid="stDataFrame"] .ag-center-cols-container,
+[data-testid="stDataFrame"] .ag-body-clipper,
+[data-testid="stDataFrame"] .ag-center-cols-clipper {
     background-color: #FFFFFF !important;
 }
 
 /* Cabeçalho */
 [data-testid="stDataFrame"] .ag-header,
 [data-testid="stDataFrame"] .ag-header-viewport,
-[data-testid="stDataFrame"] .ag-header-container {
+[data-testid="stDataFrame"] .ag-header-container,
+[data-testid="stDataFrame"] .ag-header-row {
     background-color: #D6D3CE !important;
-    border-bottom: 1px solid #BFC0C0 !important;
 }
 
-/* Células do cabeçalho */
+/* Colunas do cabeçalho */
 [data-testid="stDataFrame"] .ag-header-cell,
 [data-testid="stDataFrame"] .ag-header-group-cell {
     background-color: #D6D3CE !important;
     color: #4A4540 !important;
-    font-weight: 700 !important;
 }
 
 /* Texto do cabeçalho */
-[data-testid="stDataFrame"] .ag-header-cell-text,
-[data-testid="stDataFrame"] .ag-header-group-text {
+[data-testid="stDataFrame"] .ag-header-cell-text {
     color: #4A4540 !important;
     font-weight: 700 !important;
 }
@@ -218,10 +222,9 @@ h1, h2, h3 {
 [data-testid="stDataFrame"] .ag-row {
     background-color: #FFFFFF !important;
     color: #4A4540 !important;
-    border-bottom: 1px solid #E2E0DD !important;
 }
 
-/* Linhas alternadas */
+/* Linhas pares */
 [data-testid="stDataFrame"] .ag-row-even {
     background-color: #F5F3EF !important;
 }
@@ -230,21 +233,21 @@ h1, h2, h3 {
 [data-testid="stDataFrame"] .ag-cell {
     background-color: transparent !important;
     color: #4A4540 !important;
-    border-right: 1px solid #E2E0DD !important;
+    border-bottom: 1px solid #E2E0DD !important;
 }
 
-/* Hover nas linhas */
+/* Hover */
 [data-testid="stDataFrame"] .ag-row:hover,
 [data-testid="stDataFrame"] .ag-row-hover {
     background-color: #E8E5E0 !important;
 }
 
-/* Linha selecionada */
+/* Seleção */
 [data-testid="stDataFrame"] .ag-row-selected {
     background-color: #E1DDD7 !important;
 }
 
-/* Área esquerda/direita */
+/* Painéis laterais fixados */
 [data-testid="stDataFrame"] .ag-pinned-left-cols-container,
 [data-testid="stDataFrame"] .ag-pinned-right-cols-container {
     background-color: #FFFFFF !important;
@@ -256,146 +259,20 @@ h1, h2, h3 {
     color: #4A4540 !important;
 }
 
-/* Menu e popups internos */
-[data-testid="stDataFrame"] .ag-menu,
-[data-testid="stDataFrame"] .ag-popup,
-.ag-theme-streamlit .ag-menu {
+/* Área inferior e espaços vazios */
+[data-testid="stDataFrame"] .ag-center-cols-container,
+[data-testid="stDataFrame"] .ag-body-viewport,
+[data-testid="stDataFrame"] .ag-body-horizontal-scroll-viewport {
     background-color: #FFFFFF !important;
-    color: #4A4540 !important;
 }
 
-/* Barras de rolagem */
+/* Barra de rolagem */
 [data-testid="stDataFrame"] .ag-body-horizontal-scroll,
-[data-testid="stDataFrame"] .ag-body-vertical-scroll {
+[data-testid="stDataFrame"] .ag-body-vertical-scroll,
+[data-testid="stDataFrame"] .ag-horizontal-left-spacer,
+[data-testid="stDataFrame"] .ag-horizontal-right-spacer {
     background-color: #F5F3EF !important;
 }
-
-/* Texto geral da tabela */
-[data-testid="stDataFrame"] * {
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   EXPANDERS
-   ========================================================= */
-
-[data-testid="stExpander"] {
-    background-color: #FFFFFF !important;
-    border: 1px solid #C9C6C1 !important;
-    border-radius: 8px !important;
-}
-
-
-/* =========================================================
-   ABAS
-   ========================================================= */
-
-button[data-baseweb="tab"] {
-    color: #6E6761 !important;
-    font-weight: 600 !important;
-}
-
-button[data-baseweb="tab"][aria-selected="true"] {
-    color: #5F554D !important;
-    border-bottom-color: #B89572 !important;
-}
-
-
-/* =========================================================
-   DIVISORES
-   ========================================================= */
-
-hr {
-    border-color: #D6D3CE !important;
-}
-
-
-/* =========================================================
-   ALERTAS
-   ========================================================= */
-
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-}
-
-
-/* =========================================================
-   HEADER DO STREAMLIT
-   ========================================================= */
-
-header[data-testid="stHeader"] {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    background: #F5F3EF !important;
-    z-index: 999999 !important;
-}
-
-
-/* =========================================================
-   CONTROLE PARA REABRIR SIDEBAR
-   ========================================================= */
-
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 9999999 !important;
-}
-
-
-/* =========================================================
-   ESCONDE BOTÕES EXTRAS DO STREAMLIT
-   ========================================================= */
-
-[data-testid="stToolbarActions"] {
-    display: none !important;
-}
-
-[data-testid="stAppDeployButton"] {
-    display: none !important;
-}
-
-#MainMenu {
-    display: none !important;
-}
-
-[data-testid="stStatusWidget"] {
-    display: none !important;
-}
-
-
-/* =========================================================
-   RADIO MENU LATERAL
-   ========================================================= */
-
-[data-testid="stSidebar"] [role="radiogroup"] label {
-    background-color: rgba(255,255,255,0.55) !important;
-    border-radius: 7px !important;
-    padding: 6px 8px !important;
-    margin-bottom: 3px !important;
-    color: #4A4540 !important;
-}
-
-[data-testid="stSidebar"] [role="radiogroup"] label:hover {
-    background-color: #BFC0C0 !important;
-}
-
-
-/* =========================================================
-   CAPTIONS E TEXTOS
-   ========================================================= */
-
-p,
-span,
-label {
-    color: #4A4540 !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
 
 
 
