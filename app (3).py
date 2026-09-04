@@ -9,119 +9,204 @@ from pathlib import Path
 import tempfile
 import os
 
-# ============================================================
-# TABELAS - TEMA CLARO
-# ============================================================
-def tabela_clara(data, *args, **kwargs):
-    """Força tabelas a usarem HTML nativo com fundo claro e texto escuro de alto contraste."""
-    if isinstance(data, pd.DataFrame):
-        styler = (
-            data.style
-            .set_properties(**{
-                "background-color": "#FFFFFF",
-                "color": "#000000",
-                "border-color": "#C9C6C1",
-                "font-size": "13px",
-                "font-weight": "500"
-            })
-            .set_table_styles([
-                {
-                    "selector": "th",
-                    "props": [
-                        ("background-color", "#E2E0DD"),
-                        ("color", "#000000"),
-                        ("font-weight", "800"),
-                        ("border-color", "#C9C6C1"),
-                        ("font-size", "14px")
-                    ]
-                },
-                {
-                    "selector": "tbody tr:nth-child(even) td",
-                    "props": [("background-color", "#F9F8F6")]
-                },
-                {
-                    "selector": "tbody tr:hover td",
-                    "props": [("background-color", "#E8E5E0")]
-                }
-            ])
-        )
-        # st.table garante renderização HTML sem o fundo preto do Glide Canvas
-        return st.table(styler)
-    return st.table(data)
-
-
-# ============================================================
-# CONFIGURAÇÃO
-# ============================================================
-BASE_DIR = Path(__file__).resolve().parent
-DB = str(BASE_DIR / "ddh.db")
-BACKUP_DIR = BASE_DIR / "backups"
-BACKUP_DIR.mkdir(exist_ok=True)
-LOGO_PATH = BASE_DIR / "logo_ddh.png"
-
-try:
-    st.set_option("theme.base", "light")
-    st.set_option("theme.primaryColor", "#B89572")
-    st.set_option("theme.backgroundColor", "#F5F3EF")
-    st.set_option("theme.secondaryBackgroundColor", "#FFFFFF")
-    st.set_option("theme.textColor", "#000000")
-except Exception:
-    pass
-
-st.set_page_config(
-    page_title="DDH Campo",
-    page_icon="⛏️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
 st.markdown("""
+
 <style>
 
 /* =========================================================
-   FORÇAR SELECTBOX CLARO COM LETRAS PRETAS VIVAS
+   TEMA GERAL CLARO
    ========================================================= */
 
-/* Fundo da caixa do Selectbox */
+:root {
+    color-scheme: light !important;
+}
+
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+.main {
+    background-color: #F5F3EF !important;
+}
+
+/* Container principal */
+.block-container {
+    background-color: #F5F3EF !important;
+}
+
+
+/* =========================================================
+   BARRA LATERAL
+   ========================================================= */
+
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div:first-child {
+    background-color: #D6D3CE !important;
+}
+
+[data-testid="stSidebar"] * {
+    color: #4A4540 !important;
+}
+
+
+/* =========================================================
+   TÍTULOS E TEXTOS
+   ========================================================= */
+
+h1, h2, h3, h4 {
+    color: #5F554D !important;
+    font-weight: 800 !important;
+}
+
+p,
+label,
+[data-testid="stCaptionContainer"] {
+    color: #4A4540 !important;
+}
+
+
+/* =========================================================
+   INPUTS
+   ========================================================= */
+
+.stTextInput input,
+.stNumberInput input,
+.stDateInput input,
+.stTimeInput input,
+.stTextArea textarea {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-weight: 600 !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 7px !important;
+}
+
+/* Containers dos inputs */
+[data-baseweb="input"],
+[data-baseweb="input"] > div {
+    background-color: #FFFFFF !important;
+}
+
+
+/* =========================================================
+   SELECTBOX - CAIXA PRINCIPAL
+   ========================================================= */
+
 div[data-baseweb="select"] > div {
     background-color: #FFFFFF !important;
     border: 1px solid #C9C6C1 !important;
     border-radius: 7px !important;
 }
 
-/* Texto selecionado, opções e setas dentro do Selectbox */
-div[data-baseweb="select"] *, 
+/* Texto selecionado */
+div[data-baseweb="select"] {
+    background-color: #FFFFFF !important;
+}
+
 div[data-baseweb="select"] input,
-div[data-baseweb="select"] span {
+div[data-baseweb="select"] span,
+div[data-baseweb="select"] div {
     color: #000000 !important;
     -webkit-text-fill-color: #000000 !important;
-    font-weight: 700 !important;
 }
 
-/* Menu suspenso (Opções ao clicar no selectbox) */
-div[data-baseweb="popover"],
-ul[data-baseweb="menu"] {
-    background-color: #FFFFFF !important;
-}
-
-ul[data-baseweb="menu"] li,
-ul[data-baseweb="menu"] li * {
-    background-color: #FFFFFF !important;
-    color: #000000 !important;
-    font-weight: 600 !important;
-}
-
-ul[data-baseweb="menu"] li:hover {
-    background-color: #F5F3EF !important;
+/* Seta do Selectbox */
+div[data-baseweb="select"] svg {
+    fill: #5F554D !important;
 }
 
 
 /* =========================================================
-   DATAFRAMES E TABELAS - CABEÇALHO E CORPO CLAROS
+   MENU SUSPENSO DO SELECTBOX - FORÇAR CLARO
    ========================================================= */
 
-/* Remove fundos escuros de containers de tabela */
-[data-testid="stDataFrame"],
+/* Popover criado pelo Streamlit/BaseWeb */
+[data-baseweb="popover"],
+[data-baseweb="popover"] > div,
+[data-baseweb="popover"] > div > div {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+/* Lista principal */
+[role="listbox"],
+[role="listbox"] > div {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+/* Cada opção */
+[role="option"],
+[role="option"] > div,
+[role="option"] span {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-weight: 600 !important;
+}
+
+/* Hover */
+[role="option"]:hover,
+[role="option"][aria-selected="true"] {
+    background-color: #E8E5E0 !important;
+    color: #000000 !important;
+}
+
+/* Menu BaseWeb */
+ul[data-baseweb="menu"],
+ul[data-baseweb="menu"] > li {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+ul[data-baseweb="menu"] li:hover {
+    background-color: #E8E5E0 !important;
+}
+
+
+/* =========================================================
+   POPOVERS E POPUPS GERAIS
+   ========================================================= */
+
+[data-baseweb="popover"] * {
+    color: #000000 !important;
+}
+
+[data-baseweb="popover"] {
+    background-color: #FFFFFF !important;
+}
+
+/* Elementos que aparecem em portais fora do app */
+body > div[data-baseweb="popover"],
+body > div[role="dialog"] {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+
+/* =========================================================
+   DATE PICKER / CALENDÁRIO
+   ========================================================= */
+
+[data-baseweb="calendar"],
+[data-baseweb="calendar"] * {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+[data-baseweb="calendar"] button {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+[data-baseweb="calendar"] button:hover {
+    background-color: #E8E5E0 !important;
+}
+
+
+/* =========================================================
+   TABELAS HTML - ST.TABLE
+   ========================================================= */
+
 [data-testid="stTable"],
 .stTable {
     background-color: #FFFFFF !important;
@@ -130,71 +215,180 @@ ul[data-baseweb="menu"] li:hover {
     overflow: hidden !important;
 }
 
-/* Cabeçalho das tabelas (TH) com fundo claro e letra viva */
-.stTable th, 
-table th, 
-[data-testid="stTable"] th {
+[data-testid="stTable"] table,
+.stTable table {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+[data-testid="stTable"] th,
+.stTable th,
+table th {
     background-color: #E2E0DD !important;
     color: #000000 !important;
     font-weight: 800 !important;
-    font-size: 14px !important;
-    border-bottom: 2px solid #C9C6C1 !important;
+    border-color: #C9C6C1 !important;
 }
 
-/* Células das tabelas (TD) */
-.stTable td, 
-table td, 
-[data-testid="stTable"] td {
+[data-testid="stTable"] td,
+.stTable td,
+table td {
     background-color: #FFFFFF !important;
     color: #000000 !important;
-    font-weight: 500 !important;
     border-color: #E2E0DD !important;
+}
+
+[data-testid="stTable"] tbody tr:nth-child(even) td,
+.stTable tbody tr:nth-child(even) td {
+    background-color: #F9F8F6 !important;
+}
+
+[data-testid="stTable"] tbody tr:hover td,
+.stTable tbody tr:hover td {
+    background-color: #E8E5E0 !important;
 }
 
 
 /* =========================================================
-   FUNDO PRINCIPAL E TEXTOS GERAIS
+   DATAFRAME / AG-GRID
    ========================================================= */
 
-[data-testid="stAppViewContainer"],
-.main,
-[data-testid="stMain"],
-.block-container {
-    background-color: #F5F3EF !important;
+[data-testid="stDataFrame"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
 }
 
-[data-testid="stSidebar"] {
-    background-color: #D6D3CE !important;
+[data-testid="stDataFrame"] .ag-root-wrapper,
+[data-testid="stDataFrame"] .ag-root,
+[data-testid="stDataFrame"] .ag-body,
+[data-testid="stDataFrame"] .ag-body-viewport,
+[data-testid="stDataFrame"] .ag-center-cols-viewport {
+    background-color: #FFFFFF !important;
 }
 
-[data-testid="stSidebar"] * {
-    color: #4A4540 !important;
+[data-testid="stDataFrame"] .ag-header,
+[data-testid="stDataFrame"] .ag-header-viewport,
+[data-testid="stDataFrame"] .ag-header-container {
+    background-color: #E2E0DD !important;
 }
 
-h1, h2, h3, h4 {
+[data-testid="stDataFrame"] .ag-header-cell,
+[data-testid="stDataFrame"] .ag-header-cell-text {
+    background-color: #E2E0DD !important;
     color: #000000 !important;
     font-weight: 800 !important;
 }
 
-p, span, label, div {
-    color: #222222;
-}
-
-/* Inputs de texto padrão */
-.stTextInput input,
-.stNumberInput input,
-.stDateInput input,
-.stTimeInput input,
-.stTextArea textarea {
+[data-testid="stDataFrame"] .ag-row {
     background-color: #FFFFFF !important;
     color: #000000 !important;
-    font-weight: 600 !important;
+}
+
+[data-testid="stDataFrame"] .ag-row-even {
+    background-color: #F9F8F6 !important;
+}
+
+[data-testid="stDataFrame"] .ag-cell {
+    color: #000000 !important;
+    background-color: transparent !important;
+    border-color: #E2E0DD !important;
+}
+
+[data-testid="stDataFrame"] .ag-row:hover,
+[data-testid="stDataFrame"] .ag-row-hover {
+    background-color: #E8E5E0 !important;
+}
+
+
+/* =========================================================
+   EXPANDERS
+   ========================================================= */
+
+[data-testid="stExpander"] {
+    background-color: #FFFFFF !important;
     border: 1px solid #C9C6C1 !important;
-    border-radius: 7px !important;
+    border-radius: 8px !important;
+}
+
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary * {
+    color: #000000 !important;
+}
+
+
+/* =========================================================
+   ABAS
+   ========================================================= */
+
+button[data-baseweb="tab"] {
+    color: #5F554D !important;
+    font-weight: 600 !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #5F554D !important;
+    border-bottom-color: #B89572 !important;
+}
+
+
+/* =========================================================
+   HEADER
+   ========================================================= */
+
+header[data-testid="stHeader"] {
+    background-color: #F5F3EF !important;
+}
+
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    color: #5F554D !important;
+}
+
+
+/* =========================================================
+   BOTÕES
+   ========================================================= */
+
+.stButton > button {
+    background-color: #B89572 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+}
+
+.stButton > button:hover {
+    background-color: #A98260 !important;
+    color: #FFFFFF !important;
+}
+
+
+/* =========================================================
+   ESCONDER CONTROLES EXTRAS
+   ========================================================= */
+
+[data-testid="stToolbarActions"],
+[data-testid="stAppDeployButton"],
+#MainMenu,
+[data-testid="stStatusWidget"] {
+    display: none !important;
+}
+
+
+/* =========================================================
+   DIVISORES
+   ========================================================= */
+
+hr {
+    border-color: #D6D3CE !important;
 }
 
 </style>
+
 """, unsafe_allow_html=True)
+
 # ============================================================
 # SESSION STATE
 # ============================================================
