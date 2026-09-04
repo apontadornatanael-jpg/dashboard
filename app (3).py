@@ -25,10 +25,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-File "/mount/src/dashboard/app (3).py", line 2594
-                      """, (
-                      ^
-SyntaxError: unterminated triple-quoted string literal (detected at line 2627)
 
 # ============================================================
 # SESSION STATE
