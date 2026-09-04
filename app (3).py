@@ -24,7 +24,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
+```python
 st.markdown("""
 <style>
 
@@ -158,13 +158,121 @@ h1, h2, h3 {
 
 
 /* =========================================================
-   DATAFRAMES E TABELAS
+   DATAFRAMES E TABELAS - CINZA CLARO
    ========================================================= */
 
+/* Container externo */
 [data-testid="stDataFrame"] {
+    background-color: #FFFFFF !important;
     border: 1px solid #C9C6C1 !important;
     border-radius: 8px !important;
     overflow: hidden !important;
+}
+
+/* Todos os containers internos */
+[data-testid="stDataFrame"] > div,
+[data-testid="stDataFrame"] .stDataFrame {
+    background-color: #FFFFFF !important;
+}
+
+/* AG GRID - Container principal */
+[data-testid="stDataFrame"] .ag-root-wrapper {
+    background-color: #FFFFFF !important;
+    border: none !important;
+}
+
+/* Fundo geral da tabela */
+[data-testid="stDataFrame"] .ag-root,
+[data-testid="stDataFrame"] .ag-root-wrapper-body,
+[data-testid="stDataFrame"] .ag-body,
+[data-testid="stDataFrame"] .ag-body-viewport,
+[data-testid="stDataFrame"] .ag-center-cols-viewport,
+[data-testid="stDataFrame"] .ag-center-cols-container {
+    background-color: #FFFFFF !important;
+}
+
+/* Cabeçalho */
+[data-testid="stDataFrame"] .ag-header,
+[data-testid="stDataFrame"] .ag-header-viewport,
+[data-testid="stDataFrame"] .ag-header-container {
+    background-color: #D6D3CE !important;
+    border-bottom: 1px solid #BFC0C0 !important;
+}
+
+/* Células do cabeçalho */
+[data-testid="stDataFrame"] .ag-header-cell,
+[data-testid="stDataFrame"] .ag-header-group-cell {
+    background-color: #D6D3CE !important;
+    color: #4A4540 !important;
+    font-weight: 700 !important;
+}
+
+/* Texto do cabeçalho */
+[data-testid="stDataFrame"] .ag-header-cell-text,
+[data-testid="stDataFrame"] .ag-header-group-text {
+    color: #4A4540 !important;
+    font-weight: 700 !important;
+}
+
+/* Linhas */
+[data-testid="stDataFrame"] .ag-row {
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+    border-bottom: 1px solid #E2E0DD !important;
+}
+
+/* Linhas alternadas */
+[data-testid="stDataFrame"] .ag-row-even {
+    background-color: #F5F3EF !important;
+}
+
+/* Células */
+[data-testid="stDataFrame"] .ag-cell {
+    background-color: transparent !important;
+    color: #4A4540 !important;
+    border-right: 1px solid #E2E0DD !important;
+}
+
+/* Hover nas linhas */
+[data-testid="stDataFrame"] .ag-row:hover,
+[data-testid="stDataFrame"] .ag-row-hover {
+    background-color: #E8E5E0 !important;
+}
+
+/* Linha selecionada */
+[data-testid="stDataFrame"] .ag-row-selected {
+    background-color: #E1DDD7 !important;
+}
+
+/* Área esquerda/direita */
+[data-testid="stDataFrame"] .ag-pinned-left-cols-container,
+[data-testid="stDataFrame"] .ag-pinned-right-cols-container {
+    background-color: #FFFFFF !important;
+}
+
+/* Rodapé */
+[data-testid="stDataFrame"] .ag-status-bar {
+    background-color: #F5F3EF !important;
+    color: #4A4540 !important;
+}
+
+/* Menu e popups internos */
+[data-testid="stDataFrame"] .ag-menu,
+[data-testid="stDataFrame"] .ag-popup,
+.ag-theme-streamlit .ag-menu {
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+}
+
+/* Barras de rolagem */
+[data-testid="stDataFrame"] .ag-body-horizontal-scroll,
+[data-testid="stDataFrame"] .ag-body-vertical-scroll {
+    background-color: #F5F3EF !important;
+}
+
+/* Texto geral da tabela */
+[data-testid="stDataFrame"] * {
+    color: #4A4540 !important;
 }
 
 
@@ -288,6 +396,9 @@ label {
 
 </style>
 """, unsafe_allow_html=True)
+```
+
+
 # ============================================================
 # SESSION STATE
 # ============================================================
