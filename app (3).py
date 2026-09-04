@@ -1374,7 +1374,9 @@ elif page == "📝 Novo Boletim":
                 "Recuperado (m)", min_value=0.0, step=0.01
             )
 
-            av = max(0.0, ate_m - de_m)
+            # Arredondamento evita erro de precisão de ponto flutuante.
+            # Ex.: 68.20 - 66.65 pode resultar internamente em 1.549999...
+            av = max(0.0, round(float(ate_m) - float(de_m), 6))
             rec = recuperado / av * 100 if av else 0
             st.info(f"📏 Avanço: {av:.2f} m | 🧪 Recuperação: {rec:.1f}%")
 
@@ -1391,7 +1393,9 @@ elif page == "📝 Novo Boletim":
         if add:
             if ate_m <= de_m:
                 st.error("O valor 'Até' deve ser maior que 'De'.")
-            elif recuperado > av:
+            # Permite recuperação exatamente igual ao avanço e protege
+            # contra pequenas diferenças causadas pela precisão decimal.
+            elif float(recuperado) > float(av) + 0.000001:
                 st.error("A recuperação não pode ser maior que o avanço.")
             else:
                 execute("""
