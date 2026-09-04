@@ -29,28 +29,45 @@ st.markdown("""
 <style>
 
 /* =========================================================
-   PALETA DE CORES - MARROM CLARO / CINZA CLARO
+   PALETA DE CORES - BOA FORTUNA
+   =========================================================
+
+   Fundo principal:     #F5F3EF
+   Fundo secundário:    #FFFFFF
+   Sidebar:             #D6D3CE
+   Texto principal:     #4A4540
+   Texto secundário:    #6E6761
+   Destaque:            #B89572
+   Destaque escuro:     #9C7B63
+   Bordas:              #C9C6C1
+   Linha clara:         #E2E0DD
+*/
+
+
+/* =========================================================
+   FUNDO PRINCIPAL
    ========================================================= */
 
-/* Fundo principal */
 [data-testid="stAppViewContainer"] {
     background-color: #F5F3EF !important;
 }
 
-/* Área principal */
 .main {
     background-color: #F5F3EF !important;
 }
 
-/* Container principal */
+[data-testid="stMain"] {
+    background-color: #F5F3EF !important;
+}
+
 .block-container {
-    padding-top: 2rem;
+    padding-top: 2rem !important;
     background-color: #F5F3EF !important;
 }
 
 
 /* =========================================================
-   BARRA LATERAL - CINZA CLARO
+   BARRA LATERAL
    ========================================================= */
 
 [data-testid="stSidebar"] {
@@ -61,7 +78,8 @@ st.markdown("""
     background-color: #D6D3CE !important;
 }
 
-/* Texto da barra lateral */
+/* Texto da sidebar */
+
 [data-testid="stSidebar"] * {
     color: #4A4540 !important;
 }
@@ -71,9 +89,24 @@ st.markdown("""
    TÍTULOS
    ========================================================= */
 
-h1, h2, h3 {
-    color: #6F5A4A !important;
+h1,
+h2,
+h3,
+h4 {
+    color: #4A4540 !important;
     font-weight: 700 !important;
+}
+
+
+/* =========================================================
+   TEXTOS GERAIS
+   ========================================================= */
+
+p,
+span,
+label,
+div {
+    color: #4A4540;
 }
 
 
@@ -93,9 +126,17 @@ h1, h2, h3 {
     color: #6E6761 !important;
 }
 
+[data-testid="stMetricLabel"] * {
+    color: #6E6761 !important;
+}
+
 [data-testid="stMetricValue"] {
-    color: #5F554D !important;
+    color: #4A4540 !important;
     font-weight: 700 !important;
+}
+
+[data-testid="stMetricValue"] * {
+    color: #4A4540 !important;
 }
 
 
@@ -111,22 +152,30 @@ h1, h2, h3 {
     font-weight: 600 !important;
 }
 
+.stButton > button * {
+    color: #FFFFFF !important;
+}
+
 .stButton > button:hover {
     background-color: #A98260 !important;
     color: #FFFFFF !important;
     border: none !important;
 }
 
-/* Botão principal */
+
+/* BOTÃO PRINCIPAL */
 
 [data-testid="stBaseButton-primary"] {
     background-color: #9C7B63 !important;
     color: #FFFFFF !important;
 }
 
+[data-testid="stBaseButton-primary"] * {
+    color: #FFFFFF !important;
+}
+
 [data-testid="stBaseButton-primary"]:hover {
     background-color: #856653 !important;
-    color: #FFFFFF !important;
 }
 
 
@@ -156,12 +205,17 @@ h1, h2, h3 {
     border-color: #C9C6C1 !important;
 }
 
+[data-baseweb="select"] * {
+    color: #4A4540 !important;
+}
+
 
 /* =========================================================
-   DATAFRAMES E TABELAS - CINZA CLARO
+   DATAFRAMES E TABELAS
    ========================================================= */
 
-/* Container externo */
+/* Container principal */
+
 [data-testid="stDataFrame"] {
     background-color: #FFFFFF !important;
     border: 1px solid #C9C6C1 !important;
@@ -169,110 +223,90 @@ h1, h2, h3 {
     overflow: hidden !important;
 }
 
-/* Todos os containers internos */
-[data-testid="stDataFrame"] > div,
-[data-testid="stDataFrame"] .stDataFrame {
+/* Containers internos */
+
+[data-testid="stDataFrame"] > div {
     background-color: #FFFFFF !important;
 }
 
-/* AG GRID - Container principal */
-[data-testid="stDataFrame"] .ag-root-wrapper {
-    background-color: #FFFFFF !important;
-    border: none !important;
-}
+/* Fundo da área da tabela */
 
-/* Fundo geral da tabela */
-[data-testid="stDataFrame"] .ag-root,
-[data-testid="stDataFrame"] .ag-root-wrapper-body,
-[data-testid="stDataFrame"] .ag-body,
-[data-testid="stDataFrame"] .ag-body-viewport,
-[data-testid="stDataFrame"] .ag-center-cols-viewport,
-[data-testid="stDataFrame"] .ag-center-cols-container {
+[data-testid="stDataFrame"] [role="grid"] {
     background-color: #FFFFFF !important;
 }
 
-/* Cabeçalho */
-[data-testid="stDataFrame"] .ag-header,
-[data-testid="stDataFrame"] .ag-header-viewport,
-[data-testid="stDataFrame"] .ag-header-container {
+/* Canvas usado pelas versões recentes do Streamlit */
+
+[data-testid="stDataFrame"] canvas {
+    background-color: #FFFFFF !important;
+}
+
+/* Área de rolagem */
+
+[data-testid="stDataFrame"] [data-testid="stDataFrameResizable"] {
+    background-color: #FFFFFF !important;
+}
+
+
+/* =========================================================
+   TABELAS HTML
+   ========================================================= */
+
+table {
+    width: 100% !important;
+    background-color: #FFFFFF !important;
+    border-collapse: collapse !important;
+    color: #4A4540 !important;
+}
+
+thead {
     background-color: #D6D3CE !important;
-    border-bottom: 1px solid #BFC0C0 !important;
 }
 
-/* Células do cabeçalho */
-[data-testid="stDataFrame"] .ag-header-cell,
-[data-testid="stDataFrame"] .ag-header-group-cell {
+th {
     background-color: #D6D3CE !important;
     color: #4A4540 !important;
     font-weight: 700 !important;
+    border: 1px solid #C9C6C1 !important;
+    padding: 10px !important;
 }
 
-/* Texto do cabeçalho */
-[data-testid="stDataFrame"] .ag-header-cell-text,
-[data-testid="stDataFrame"] .ag-header-group-text {
-    color: #4A4540 !important;
-    font-weight: 700 !important;
-}
-
-/* Linhas */
-[data-testid="stDataFrame"] .ag-row {
+td {
     background-color: #FFFFFF !important;
     color: #4A4540 !important;
-    border-bottom: 1px solid #E2E0DD !important;
+    border: 1px solid #E2E0DD !important;
+    padding: 8px !important;
 }
 
-/* Linhas alternadas */
-[data-testid="stDataFrame"] .ag-row-even {
+tr:nth-child(even) td {
     background-color: #F5F3EF !important;
 }
 
-/* Células */
-[data-testid="stDataFrame"] .ag-cell {
-    background-color: transparent !important;
-    color: #4A4540 !important;
-    border-right: 1px solid #E2E0DD !important;
-}
-
-/* Hover nas linhas */
-[data-testid="stDataFrame"] .ag-row:hover,
-[data-testid="stDataFrame"] .ag-row-hover {
+tr:hover td {
     background-color: #E8E5E0 !important;
 }
 
-/* Linha selecionada */
-[data-testid="stDataFrame"] .ag-row-selected {
-    background-color: #E1DDD7 !important;
+
+/* =========================================================
+   BARRAS DE ROLAGEM
+   ========================================================= */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
 }
 
-/* Área esquerda/direita */
-[data-testid="stDataFrame"] .ag-pinned-left-cols-container,
-[data-testid="stDataFrame"] .ag-pinned-right-cols-container {
-    background-color: #FFFFFF !important;
+::-webkit-scrollbar-track {
+    background: #F5F3EF !important;
 }
 
-/* Rodapé */
-[data-testid="stDataFrame"] .ag-status-bar {
-    background-color: #F5F3EF !important;
-    color: #4A4540 !important;
+::-webkit-scrollbar-thumb {
+    background: #B89572 !important;
+    border-radius: 8px;
 }
 
-/* Menu e popups internos */
-[data-testid="stDataFrame"] .ag-menu,
-[data-testid="stDataFrame"] .ag-popup,
-.ag-theme-streamlit .ag-menu {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-}
-
-/* Barras de rolagem */
-[data-testid="stDataFrame"] .ag-body-horizontal-scroll,
-[data-testid="stDataFrame"] .ag-body-vertical-scroll {
-    background-color: #F5F3EF !important;
-}
-
-/* Texto geral da tabela */
-[data-testid="stDataFrame"] * {
-    color: #4A4540 !important;
+::-webkit-scrollbar-thumb:hover {
+    background: #9C7B63 !important;
 }
 
 
@@ -286,6 +320,10 @@ h1, h2, h3 {
     border-radius: 8px !important;
 }
 
+[data-testid="stExpander"] * {
+    color: #4A4540 !important;
+}
+
 
 /* =========================================================
    ABAS
@@ -297,7 +335,7 @@ button[data-baseweb="tab"] {
 }
 
 button[data-baseweb="tab"][aria-selected="true"] {
-    color: #5F554D !important;
+    color: #4A4540 !important;
     border-bottom-color: #B89572 !important;
 }
 
@@ -328,7 +366,7 @@ header[data-testid="stHeader"] {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
-    background: #F5F3EF !important;
+    background-color: #F5F3EF !important;
     z-index: 999999 !important;
 }
 
@@ -368,30 +406,80 @@ header[data-testid="stHeader"] {
 
 
 /* =========================================================
-   RADIO MENU LATERAL
+   MENU RADIO LATERAL
    ========================================================= */
 
 [data-testid="stSidebar"] [role="radiogroup"] label {
-    background-color: rgba(255,255,255,0.55) !important;
+    background-color: rgba(255,255,255,0.70) !important;
     border-radius: 7px !important;
     padding: 6px 8px !important;
     margin-bottom: 3px !important;
     color: #4A4540 !important;
 }
 
+[data-testid="stSidebar"] [role="radiogroup"] label * {
+    color: #4A4540 !important;
+}
+
 [data-testid="stSidebar"] [role="radiogroup"] label:hover {
-    background-color: #BFC0C0 !important;
+    background-color: #C5C1BA !important;
+}
+
+
+/* Item selecionado */
+
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+    background-color: #B89572 !important;
+}
+
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) * {
+    color: #FFFFFF !important;
 }
 
 
 /* =========================================================
-   CAPTIONS E TEXTOS
+   CAPTIONS E TEXTOS SECUNDÁRIOS
    ========================================================= */
 
-p,
-span,
-label {
-    color: #4A4540 !important;
+[data-testid="stCaptionContainer"] {
+    color: #6E6761 !important;
+}
+
+.stCaption,
+.stCaption * {
+    color: #6E6761 !important;
+}
+
+
+/* =========================================================
+   GRÁFICOS
+   ========================================================= */
+
+/* Container externo dos gráficos */
+
+[data-testid="stPlotlyChart"] {
+    background-color: #FFFFFF !important;
+    border-radius: 8px !important;
+}
+
+
+/* =========================================================
+   CONTAINERS
+   ========================================================= */
+
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background-color: transparent !important;
+}
+
+
+/* =========================================================
+   CORREÇÃO FINAL - REMOVER FUNDOS ESCUROS
+   ========================================================= */
+
+[data-testid="stDataFrame"],
+[data-testid="stDataFrame"] > div,
+[data-testid="stDataFrame"] > div > div {
+    background-color: #FFFFFF !important;
 }
 
 </style>
