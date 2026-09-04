@@ -1827,25 +1827,25 @@ elif page == "👥 Equipes":
             status = st.selectbox("Status", ["Ativa","Inativa"])
             salvar = st.form_submit_button("Cadastrar equipe", type="primary")
 
-        if salvar:
-            if codigo.strip() and nome.strip():
-                try:
-                    execute("""
-                        INSERT INTO equipes(
-                            codigo,nome,supervisor_id,sondador_id,
-                            auxiliar1_id,auxiliar2_id,status
-                        )
-                        VALUES(?,?,?,?,?,?,?)
-                    """, (
-                        codigo.strip(), nome.strip(), supervisor,
-                        sondador, aux1, aux2, status
-                    ))
-                    st.success("Equipe cadastrada.")
-                    st.rerun()
-                except sqlite3.IntegrityError:
-                    st.error("Código de equipe já cadastrado.")
-            else:
-                st.error("Informe código e nome.")
+       if salvar:
+    if codigo.strip() and nome.strip():
+        try:
+            execute("""
+                INSERT INTO equipes(
+                    codigo,nome,supervisor_id,sondador_id,
+                    auxiliar1_id,auxiliar2_id,auxiliar3_id,status
+                )
+                VALUES(?,?,?,?,?,?,?,?)
+            """, (
+                codigo.strip(), nome.strip(), supervisor,
+                sondador, aux1, aux2, aux3, status
+            ))
+            st.success("Equipe cadastrada.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Erro ao cadastrar equipe: {e}")
+    else:
+        st.error("Informe código e nome.")
 
         st.divider()
         st.dataframe(
