@@ -9,7 +9,6 @@ from pathlib import Path
 import tempfile
 import os
 
-```python
 st.markdown("""
 <style>
 
@@ -381,7 +380,7 @@ label {
 
 </style>
 """, unsafe_allow_html=True)
-```
+
 
 # ============================================================
 # SESSION STATE
