@@ -1804,10 +1804,17 @@ elif page == "👷 Colaboradores":
 # ============================================================
 elif page == "👥 Equipes":
     st.title("👥 EQUIPES")
-    dfc = query("SELECT * FROM colaboradores WHERE status='Ativo' ORDER BY nome")
+
+    dfc = query("""
+        SELECT *
+        FROM colaboradores
+        WHERE status='Ativo'
+        ORDER BY nome
+    """)
 
     if dfc.empty:
         st.warning("Cadastre colaboradores primeiro.")
+
     else:
         opts = dfc["id"].tolist()
 
@@ -1816,44 +1823,107 @@ elif page == "👥 Equipes":
             return str(x) if row.empty else str(row.iloc[0]["nome"])
 
         with st.form("form_equipe", clear_on_submit=True):
+
+            # Código e nome
             c1, c2 = st.columns(2)
+
             codigo = c1.text_input("Código da equipe")
             nome = c2.text_input("Nome da equipe")
-            supervisor = st.selectbox("Supervisor", opts, format_func=fmt_colaborador)
-            sondador = st.selectbox("Sondador", opts, format_func=fmt_colaborador)
-            a1, a2 = st.columns(2)
-            aux1 = a1.selectbox("Auxiliar 1", opts, format_func=fmt_colaborador)
-            aux2 = a2.selectbox("Auxiliar 2", opts, format_func=fmt_colaborador)
-            status = st.selectbox("Status", ["Ativa","Inativa"])
-            salvar = st.form_submit_button("Cadastrar equipe", type="primary")
 
-       if salvar:
-    if codigo.strip() and nome.strip():
-        try:
-            execute("""
-                INSERT INTO equipes(
-                    codigo,nome,supervisor_id,sondador_id,
-                    auxiliar1_id,auxiliar2_id,auxiliar3_id,status
-                )
-                VALUES(?,?,?,?,?,?,?,?)
-            """, (
-                codigo.strip(), nome.strip(), supervisor,
-                sondador, aux1, aux2, aux3, status
-            ))
-            st.success("Equipe cadastrada.")
-            st.rerun()
-        except Exception as e:
-            st.error(f"Erro ao cadastrar equipe: {e}")
-    else:
-        st.error("Informe código e nome.")
+            # Supervisor e sondador
+            supervisor = st.selectbox(
+                "Supervisor",
+                opts,
+                format_func=fmt_colaborador
+            )
 
+            sondador = st.selectbox(
+                "Sondador",
+                opts,
+                format_func=fmt_colaborador
+            )
+
+            # Auxiliares
+            a1, a2, a3 = st.columns(3)
+
+            aux1 = a1.selectbox(
+                "Auxiliar 1",
+                opts,
+                format_func=fmt_colaborador
+            )
+
+            aux2 = a2.selectbox(
+                "Auxiliar 2",
+                opts,
+                format_func=fmt_colaborador
+            )
+
+            aux3 = a3.selectbox(
+                "Auxiliar 3",
+                opts,
+                format_func=fmt_colaborador
+            )
+
+            status = st.selectbox(
+                "Status",
+                ["Ativa", "Inativa"]
+            )
+
+            salvar = st.form_submit_button(
+                "Cadastrar equipe",
+                type="primary"
+            )
+
+        # Salvar equipe
+        if salvar:
+
+            if codigo.strip() and nome.strip():
+
+                try:
+                    execute("""
+                        INSERT INTO equipes(
+                            codigo,
+                            nome,
+                            supervisor_id,
+                            sondador_id,
+                            auxiliar1_id,
+                            auxiliar2_id,
+                            auxiliar3_id,
+                            status
+                        )
+                        VALUES(?,?,?,?,?,?,?,?)
+                    """, (
+                        codigo.strip(),
+                        nome.strip(),
+                        supervisor,
+                        sondador,
+                        aux1,
+                        aux2,
+                        aux3,
+                        status
+                    ))
+
+                    st.success("Equipe cadastrada com sucesso.")
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"Erro ao cadastrar equipe: {e}")
+
+            else:
+                st.error("Informe código e nome.")
+
+        # Lista de equipes
         st.divider()
+
         st.dataframe(
-            query("SELECT * FROM equipes ORDER BY codigo"),
+            query("""
+                SELECT *
+                FROM equipes
+                ORDER BY codigo
+            """),
             use_container_width=True,
             hide_index=True
         )
-
 # ============================================================
 # SONDAS
 # ============================================================
