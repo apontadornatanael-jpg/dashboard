@@ -27,50 +27,237 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+/* ============================================================
+   TEMA CLARO — BEGE / AREIA
+   ============================================================ */
+:root {
+    --bg: #F7F1E7;
+    --bg-soft: #FCF8F1;
+    --card: #FFFDF8;
+    --sidebar: #EDE2D0;
+    --border: #D8C8B4;
+    --text: #4B382B;
+    --muted: #796657;
+    --primary: #A8794D;
+    --primary-hover: #8D623C;
+    --table-head: #E7D4BC;
+    --table-row: #FFFDF8;
+    --table-alt: #F6EDE1;
+}
 
-/* Mantém o cabeçalho do Streamlit ativo para o menu lateral */
+/* Fundo geral */
+html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+}
+
+/* Área principal */
+.main, .main .block-container {
+    background: var(--bg) !important;
+    color: var(--text) !important;
+}
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* Textos */
+h1, h2, h3, h4, h5, h6, p, label,
+[data-testid="stMarkdownContainer"],
+[data-testid="stCaptionContainer"],
+.stMarkdown {
+    color: var(--text) !important;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: var(--sidebar) !important;
+    border-right: 1px solid var(--border) !important;
+}
+[data-testid="stSidebar"] > div:first-child {
+    background: var(--sidebar) !important;
+}
+[data-testid="stSidebar"] * {
+    color: var(--text) !important;
+}
+
+/* Cabeçalho do Streamlit */
 header[data-testid="stHeader"] {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
-    background: transparent !important;
+    background: var(--bg) !important;
     z-index: 999999 !important;
+    border-bottom: 1px solid var(--border) !important;
 }
 
-/* Mantém SEMPRE visível o controle para reabrir a barra lateral */
+/* Controle para reabrir a barra lateral */
 [data-testid="stSidebarCollapsedControl"],
 [data-testid="collapsedControl"] {
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
     z-index: 9999999 !important;
+    color: var(--text) !important;
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
 }
 
-/* Esconde somente os botões extras do canto superior direito */
-[data-testid="stToolbarActions"] {
-    display: none !important;
-}
-
-/* Esconde Share */
-[data-testid="stAppDeployButton"] {
-    display: none !important;
-}
-
-/* Esconde menu principal sem esconder o controle da sidebar */
-#MainMenu {
-    display: none !important;
-}
-
-/* Esconde status */
+/* Esconde extras */
+[data-testid="stToolbarActions"],
+[data-testid="stAppDeployButton"],
+#MainMenu,
 [data-testid="stStatusWidget"] {
     display: none !important;
 }
 
-/* Ajuste do conteúdo */
-.block-container {
-    padding-top: 2rem;
+/* Botões */
+.stButton > button,
+.stDownloadButton > button,
+[data-testid="stFormSubmitButton"] > button {
+    background: var(--primary) !important;
+    color: #FFFFFF !important;
+    border: 1px solid var(--primary) !important;
+    border-radius: 9px !important;
+    font-weight: 600 !important;
+}
+.stButton > button:hover,
+.stDownloadButton > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
+    background: var(--primary-hover) !important;
+    border-color: var(--primary-hover) !important;
+    color: #FFFFFF !important;
 }
 
+/* Campos clicáveis */
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stDateInput"] input,
+[data-testid="stTimeInput"] input,
+[data-baseweb="input"] input,
+[data-baseweb="textarea"] textarea {
+    background: var(--card) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+}
+
+/* Selectbox */
+[data-baseweb="select"] > div,
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+    background: var(--card) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+}
+
+/* Menus suspensos */
+[role="listbox"],
+[data-baseweb="popover"] {
+    background: var(--card) !important;
+    color: var(--text) !important;
+}
+[role="option"] {
+    background: var(--card) !important;
+    color: var(--text) !important;
+}
+[role="option"]:hover {
+    background: var(--table-head) !important;
+}
+
+/* Radio / menu lateral */
+[data-testid="stRadio"] label {
+    background: transparent !important;
+    color: var(--text) !important;
+    border-radius: 8px !important;
+}
+[data-testid="stRadio"] label:hover {
+    background: #E3D2BC !important;
+}
+
+/* Expander */
+[data-testid="stExpander"] {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary * {
+    color: var(--text) !important;
+}
+
+/* Cards / containers */
+[data-testid="stMetric"],
+[data-testid="stVerticalBlockBorderWrapper"] {
+    background: var(--card) !important;
+    border-color: var(--border) !important;
+    border-radius: 12px !important;
+}
+[data-testid="stMetricLabel"],
+[data-testid="stMetricValue"],
+[data-testid="stMetricDelta"] {
+    color: var(--text) !important;
+}
+
+/* Tabelas e DataFrames */
+[data-testid="stDataFrame"],
+[data-testid="stDataEditor"] {
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 10px !important;
+    overflow: hidden !important;
+}
+[data-testid="stDataFrame"] * {
+    color: var(--text) !important;
+}
+[data-testid="stDataFrame"] [role="columnheader"],
+[data-testid="stDataEditor"] [role="columnheader"] {
+    background: var(--table-head) !important;
+    color: var(--text) !important;
+    font-weight: 700 !important;
+}
+[data-testid="stDataFrame"] [role="gridcell"],
+[data-testid="stDataEditor"] [role="gridcell"] {
+    background: var(--table-row) !important;
+    border-color: var(--border) !important;
+}
+
+/* Alertas */
+[data-testid="stAlert"] {
+    background: var(--card) !important;
+    color: var(--text) !important;
+    border-color: var(--border) !important;
+}
+
+/* Divisores */
+hr, [data-testid="stDivider"] {
+    border-color: var(--border) !important;
+}
+
+/* Formulários */
+[data-testid="stForm"] {
+    background: var(--bg-soft) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+    padding: 16px !important;
+}
+
+/* Abas */
+[data-testid="stTabs"] button {
+    color: var(--text) !important;
+    background: transparent !important;
+}
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: var(--primary-hover) !important;
+    border-bottom-color: var(--primary) !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg-soft); }
+::-webkit-scrollbar-thumb { background: #CBB59A; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #B89A79; }
 </style>
 """, unsafe_allow_html=True)
 
