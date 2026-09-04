@@ -9,43 +9,246 @@ from pathlib import Path
 import tempfile
 import os
 
+
+# ============================================================
+# CONFIGURAÇÃO DOS CAMINHOS E BANCO DE DADOS
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parent
+
+DB = str(BASE_DIR / "ddh.db")
+
+BACKUP_DIR = BASE_DIR / "backups"
+BACKUP_DIR.mkdir(exist_ok=True)
+
+LOGO_PATH = BASE_DIR / "logo_ddh.png"
+
+
+# ============================================================
+# CONFIGURAÇÃO DA PÁGINA
+# ============================================================
+
+st.set_page_config(
+    page_title="DDH Campo",
+    page_icon="⛏️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+# ============================================================
+# TEMA CLARO
+# ============================================================
+
+try:
+    st.set_option("theme.base", "light")
+    st.set_option("theme.primaryColor", "#B89572")
+    st.set_option("theme.backgroundColor", "#F5F3EF")
+    st.set_option("theme.secondaryBackgroundColor", "#FFFFFF")
+    st.set_option("theme.textColor", "#000000")
+except Exception:
+    pass
+
+
+# ============================================================
+# CSS - TEMA MARROM CLARO / CINZA CLARO
+# ============================================================
+
 st.markdown("""
 <style>
 
 /* =========================================================
-   PALETA DE CORES - MARROM CLARO / CINZA CLARO
+   SELECTBOX CLARO
    ========================================================= */
 
-/* Fundo principal */
-[data-testid="stAppViewContainer"] {
-    background-color: #F5F3EF !important;
+div[data-baseweb="select"] > div {
+    background-color: #FFFFFF !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 7px !important;
 }
 
-/* Área principal */
-.main {
-    background-color: #F5F3EF !important;
+div[data-baseweb="select"] *,
+div[data-baseweb="select"] input,
+div[data-baseweb="select"] span {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-weight: 600 !important;
 }
 
-/* Container principal */
+
+/* MENU DO SELECTBOX */
+
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] > div,
+ul[data-baseweb="menu"] {
+    background-color: #FFFFFF !important;
+}
+
+ul[data-baseweb="menu"] li,
+ul[data-baseweb="menu"] li * {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+ul[data-baseweb="menu"] li:hover,
+ul[data-baseweb="menu"] li:hover * {
+    background-color: #E8E5E0 !important;
+}
+
+
+/* =========================================================
+   DATAFRAME - FORÇAR TEMA CLARO
+   ========================================================= */
+
+[data-testid="stDataFrame"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+[data-testid="stDataFrame"] > div,
+[data-testid="stDataFrame"] > div > div {
+    background-color: #FFFFFF !important;
+}
+
+
+/* AG GRID */
+
+[data-testid="stDataFrame"] .ag-root-wrapper {
+    background-color: #FFFFFF !important;
+    border: none !important;
+}
+
+[data-testid="stDataFrame"] .ag-root,
+[data-testid="stDataFrame"] .ag-root-wrapper-body,
+[data-testid="stDataFrame"] .ag-body,
+[data-testid="stDataFrame"] .ag-body-viewport,
+[data-testid="stDataFrame"] .ag-center-cols-viewport,
+[data-testid="stDataFrame"] .ag-center-cols-container {
+    background-color: #FFFFFF !important;
+}
+
+
+/* CABEÇALHO */
+
+[data-testid="stDataFrame"] .ag-header,
+[data-testid="stDataFrame"] .ag-header-viewport,
+[data-testid="stDataFrame"] .ag-header-container {
+    background-color: #D6D3CE !important;
+}
+
+[data-testid="stDataFrame"] .ag-header-cell,
+[data-testid="stDataFrame"] .ag-header-cell-wrapper,
+[data-testid="stDataFrame"] .ag-header-group-cell {
+    background-color: #D6D3CE !important;
+    color: #000000 !important;
+}
+
+[data-testid="stDataFrame"] .ag-header-cell-text {
+    color: #000000 !important;
+    font-weight: 800 !important;
+}
+
+
+/* LINHAS */
+
+[data-testid="stDataFrame"] .ag-row {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+[data-testid="stDataFrame"] .ag-row-even {
+    background-color: #F7F6F4 !important;
+}
+
+
+/* CÉLULAS */
+
+[data-testid="stDataFrame"] .ag-cell {
+    background-color: transparent !important;
+    color: #000000 !important;
+    border-color: #E2E0DD !important;
+}
+
+
+/* LINHA AO PASSAR O MOUSE */
+
+[data-testid="stDataFrame"] .ag-row-hover,
+[data-testid="stDataFrame"] .ag-row:hover {
+    background-color: #E8E5E0 !important;
+}
+
+
+/* LINHA SELECIONADA */
+
+[data-testid="stDataFrame"] .ag-row-selected {
+    background-color: #DEDAD5 !important;
+}
+
+
+/* TEXTO DA TABELA */
+
+[data-testid="stDataFrame"] * {
+    color: #000000 !important;
+}
+
+
+/* =========================================================
+   TABELAS HTML / ST.TABLE
+   ========================================================= */
+
+[data-testid="stTable"],
+.stTable {
+    background-color: #FFFFFF !important;
+}
+
+[data-testid="stTable"] table,
+.stTable table {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+[data-testid="stTable"] th,
+.stTable th {
+    background-color: #D6D3CE !important;
+    color: #000000 !important;
+    font-weight: 800 !important;
+}
+
+[data-testid="stTable"] td,
+.stTable td {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+}
+
+[data-testid="stTable"] tr:nth-child(even) td,
+.stTable tr:nth-child(even) td {
+    background-color: #F7F6F4 !important;
+}
+
+
+/* =========================================================
+   FUNDO PRINCIPAL
+   ========================================================= */
+
+[data-testid="stAppViewContainer"],
+.main,
+[data-testid="stMain"],
 .block-container {
-    padding-top: 2rem;
     background-color: #F5F3EF !important;
 }
 
 
 /* =========================================================
-   BARRA LATERAL - CINZA CLARO
+   BARRA LATERAL
    ========================================================= */
 
-[data-testid="stSidebar"] {
-    background-color: #D6D3CE !important;
-}
-
+[data-testid="stSidebar"],
 [data-testid="stSidebar"] > div:first-child {
     background-color: #D6D3CE !important;
 }
 
-/* Texto da barra lateral */
 [data-testid="stSidebar"] * {
     color: #4A4540 !important;
 }
@@ -55,62 +258,12 @@ st.markdown("""
    TÍTULOS
    ========================================================= */
 
-h1, h2, h3 {
-    color: #6F5A4A !important;
-    font-weight: 700 !important;
-}
-
-
-/* =========================================================
-   MÉTRICAS
-   ========================================================= */
-
-[data-testid="stMetric"] {
-    background-color: #FFFFFF !important;
-    border: 1px solid #B89572 !important;
-    border-radius: 12px !important;
-    padding: 15px !important;
-    box-shadow: 0 2px 6px rgba(90, 80, 70, 0.10) !important;
-}
-
-[data-testid="stMetricLabel"] {
-    color: #6E6761 !important;
-}
-
-[data-testid="stMetricValue"] {
-    color: #5F554D !important;
-    font-weight: 700 !important;
-}
-
-
-/* =========================================================
-   BOTÕES
-   ========================================================= */
-
-.stButton > button {
-    background-color: #B89572 !important;
-    color: #FFFFFF !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-}
-
-.stButton > button:hover {
-    background-color: #A98260 !important;
-    color: #FFFFFF !important;
-    border: none !important;
-}
-
-/* Botão principal */
-
-[data-testid="stBaseButton-primary"] {
-    background-color: #9C7B63 !important;
-    color: #FFFFFF !important;
-}
-
-[data-testid="stBaseButton-primary"]:hover {
-    background-color: #856653 !important;
-    color: #FFFFFF !important;
+h1,
+h2,
+h3,
+h4 {
+    color: #000000 !important;
+    font-weight: 800 !important;
 }
 
 
@@ -124,139 +277,47 @@ h1, h2, h3 {
 .stTimeInput input,
 .stTextArea textarea {
     background-color: #FFFFFF !important;
-    color: #4A4540 !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
     border: 1px solid #C9C6C1 !important;
     border-radius: 7px !important;
 }
 
 
 /* =========================================================
-   SELECTBOX
+   BOTÕES
    ========================================================= */
 
-[data-baseweb="select"] > div {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-    border-color: #C9C6C1 !important;
+.stButton > button {
+    background-color: #B89572 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 700 !important;
+}
+
+.stButton > button:hover {
+    background-color: #A98260 !important;
+    color: #FFFFFF !important;
 }
 
 
 /* =========================================================
-   DATAFRAMES E TABELAS - CINZA CLARO
+   MÉTRICAS
    ========================================================= */
 
-/* Container externo */
-[data-testid="stDataFrame"] {
+[data-testid="stMetric"] {
     background-color: #FFFFFF !important;
     border: 1px solid #C9C6C1 !important;
-    border-radius: 8px !important;
-    overflow: hidden !important;
+    border-radius: 10px !important;
 }
 
-/* Todos os containers internos */
-[data-testid="stDataFrame"] > div,
-[data-testid="stDataFrame"] .stDataFrame {
-    background-color: #FFFFFF !important;
-}
-
-/* AG GRID - Container principal */
-[data-testid="stDataFrame"] .ag-root-wrapper {
-    background-color: #FFFFFF !important;
-    border: none !important;
-}
-
-/* Fundo geral da tabela */
-[data-testid="stDataFrame"] .ag-root,
-[data-testid="stDataFrame"] .ag-root-wrapper-body,
-[data-testid="stDataFrame"] .ag-body,
-[data-testid="stDataFrame"] .ag-body-viewport,
-[data-testid="stDataFrame"] .ag-center-cols-viewport,
-[data-testid="stDataFrame"] .ag-center-cols-container {
-    background-color: #FFFFFF !important;
-}
-
-/* Cabeçalho */
-[data-testid="stDataFrame"] .ag-header,
-[data-testid="stDataFrame"] .ag-header-viewport,
-[data-testid="stDataFrame"] .ag-header-container {
-    background-color: #D6D3CE !important;
-    border-bottom: 1px solid #BFC0C0 !important;
-}
-
-/* Células do cabeçalho */
-[data-testid="stDataFrame"] .ag-header-cell,
-[data-testid="stDataFrame"] .ag-header-group-cell {
-    background-color: #D6D3CE !important;
-    color: #4A4540 !important;
-    font-weight: 700 !important;
-}
-
-/* Texto do cabeçalho */
-[data-testid="stDataFrame"] .ag-header-cell-text,
-[data-testid="stDataFrame"] .ag-header-group-text {
-    color: #4A4540 !important;
-    font-weight: 700 !important;
-}
-
-/* Linhas */
-[data-testid="stDataFrame"] .ag-row {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-    border-bottom: 1px solid #E2E0DD !important;
-}
-
-/* Linhas alternadas */
-[data-testid="stDataFrame"] .ag-row-even {
-    background-color: #F5F3EF !important;
-}
-
-/* Células */
-[data-testid="stDataFrame"] .ag-cell {
-    background-color: transparent !important;
-    color: #4A4540 !important;
-    border-right: 1px solid #E2E0DD !important;
-}
-
-/* Hover nas linhas */
-[data-testid="stDataFrame"] .ag-row:hover,
-[data-testid="stDataFrame"] .ag-row-hover {
-    background-color: #E8E5E0 !important;
-}
-
-/* Linha selecionada */
-[data-testid="stDataFrame"] .ag-row-selected {
-    background-color: #E1DDD7 !important;
-}
-
-/* Área esquerda/direita */
-[data-testid="stDataFrame"] .ag-pinned-left-cols-container,
-[data-testid="stDataFrame"] .ag-pinned-right-cols-container {
-    background-color: #FFFFFF !important;
-}
-
-/* Rodapé */
-[data-testid="stDataFrame"] .ag-status-bar {
-    background-color: #F5F3EF !important;
+[data-testid="stMetricLabel"] {
     color: #4A4540 !important;
 }
 
-/* Menu e popups internos */
-[data-testid="stDataFrame"] .ag-menu,
-[data-testid="stDataFrame"] .ag-popup,
-.ag-theme-streamlit .ag-menu {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-}
-
-/* Barras de rolagem */
-[data-testid="stDataFrame"] .ag-body-horizontal-scroll,
-[data-testid="stDataFrame"] .ag-body-vertical-scroll {
-    background-color: #F5F3EF !important;
-}
-
-/* Texto geral da tabela */
-[data-testid="stDataFrame"] * {
-    color: #4A4540 !important;
+[data-testid="stMetricValue"] {
+    color: #000000 !important;
 }
 
 
@@ -276,111 +337,48 @@ h1, h2, h3 {
    ========================================================= */
 
 button[data-baseweb="tab"] {
-    color: #6E6761 !important;
-    font-weight: 600 !important;
+    color: #4A4540 !important;
 }
 
 button[data-baseweb="tab"][aria-selected="true"] {
-    color: #5F554D !important;
+    color: #000000 !important;
     border-bottom-color: #B89572 !important;
 }
 
 
 /* =========================================================
-   DIVISORES
-   ========================================================= */
-
-hr {
-    border-color: #D6D3CE !important;
-}
-
-
-/* =========================================================
-   ALERTAS
-   ========================================================= */
-
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-}
-
-
-/* =========================================================
-   HEADER DO STREAMLIT
-   ========================================================= */
-
-header[data-testid="stHeader"] {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    background: #F5F3EF !important;
-    z-index: 999999 !important;
-}
-
-
-/* =========================================================
-   CONTROLE PARA REABRIR SIDEBAR
-   ========================================================= */
-
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 9999999 !important;
-}
-
-
-/* =========================================================
-   ESCONDE BOTÕES EXTRAS DO STREAMLIT
-   ========================================================= */
-
-[data-testid="stToolbarActions"] {
-    display: none !important;
-}
-
-[data-testid="stAppDeployButton"] {
-    display: none !important;
-}
-
-#MainMenu {
-    display: none !important;
-}
-
-[data-testid="stStatusWidget"] {
-    display: none !important;
-}
-
-
-/* =========================================================
-   RADIO MENU LATERAL
-   ========================================================= */
-
-[data-testid="stSidebar"] [role="radiogroup"] label {
-    background-color: rgba(255,255,255,0.55) !important;
-    border-radius: 7px !important;
-    padding: 6px 8px !important;
-    margin-bottom: 3px !important;
-    color: #4A4540 !important;
-}
-
-[data-testid="stSidebar"] [role="radiogroup"] label:hover {
-    background-color: #BFC0C0 !important;
-}
-
-
-/* =========================================================
-   CAPTIONS E TEXTOS
+   TEXTOS GERAIS
    ========================================================= */
 
 p,
 span,
 label {
-    color: #4A4540 !important;
+    color: #222222 !important;
+}
+
+
+/* =========================================================
+   HEADER STREAMLIT
+   ========================================================= */
+
+header[data-testid="stHeader"] {
+    background-color: #F5F3EF !important;
+}
+
+
+/* =========================================================
+   ESCONDER ELEMENTOS EXTRAS
+   ========================================================= */
+
+[data-testid="stToolbarActions"],
+[data-testid="stAppDeployButton"],
+[data-testid="stStatusWidget"],
+#MainMenu {
+    display: none !important;
 }
 
 </style>
 """, unsafe_allow_html=True)
-
 
 # ============================================================
 # SESSION STATE
