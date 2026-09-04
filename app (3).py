@@ -19,7 +19,7 @@ def tabela_clara(data, *args, **kwargs):
             data.style
             .set_properties(**{
                 "background-color": "#FFFFFF",
-                "color": "#4A4540",
+                "color": "#4A3540",
                 "border-color": "#E2E0DD",
                 "font-size": "13px"
             })
