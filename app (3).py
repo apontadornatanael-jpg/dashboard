@@ -10,6 +10,43 @@ import tempfile
 import os
 
 # ============================================================
+# TABELAS - TEMA CLARO
+# ============================================================
+def tabela_clara(data, *args, **kwargs):
+    """Força DataFrames do Streamlit a usar fundo claro e texto escuro."""
+    if isinstance(data, pd.DataFrame):
+        styler = (
+            data.style
+            .set_properties(**{
+                "background-color": "#FFFFFF",
+                "color": "#4A4540",
+                "border-color": "#E2E0DD",
+                "font-size": "13px"
+            })
+            .set_table_styles([
+                {
+                    "selector": "th",
+                    "props": [
+                        ("background-color", "#D6D3CE"),
+                        ("color", "#4A4540"),
+                        ("font-weight", "700"),
+                        ("border-color", "#C9C6C1")
+                    ]
+                },
+                {
+                    "selector": "tbody tr:nth-child(even) td",
+                    "props": [("background-color", "#F5F3EF")]
+                },
+                {
+                    "selector": "tbody tr:hover td",
+                    "props": [("background-color", "#E8E5E0")]
+                }
+            ])
+        )
+        return st.dataframe(styler, *args, **kwargs)
+    return st.dataframe(data, *args, **kwargs)
+
+# ============================================================
 # CONFIGURAÇÃO
 # ============================================================
 BASE_DIR = Path(__file__).resolve().parent
@@ -17,6 +54,18 @@ DB = str(BASE_DIR / "ddh.db")
 BACKUP_DIR = BASE_DIR / "backups"
 BACKUP_DIR.mkdir(exist_ok=True)
 LOGO_PATH = BASE_DIR / "logo_ddh.png"
+
+# Tema claro para os componentes nativos do Streamlit.
+# Se o ambiente bloquear a alteração em tempo de execução, o CSS e os Styler
+# das tabelas continuam sendo aplicados normalmente.
+try:
+    st.set_option("theme.base", "light")
+    st.set_option("theme.primaryColor", "#B89572")
+    st.set_option("theme.backgroundColor", "#F5F3EF")
+    st.set_option("theme.secondaryBackgroundColor", "#FFFFFF")
+    st.set_option("theme.textColor", "#4A4540")
+except Exception:
+    pass
 
 st.set_page_config(
     page_title="DDH Campo",
@@ -211,81 +260,42 @@ div {
 
 
 /* =========================================================
-   DATAFRAMES E TABELAS
+   DATAFRAMES E TABELAS - TEMA CLARO
    ========================================================= */
-
-/* Container principal */
 
 [data-testid="stDataFrame"] {
     background-color: #FFFFFF !important;
     border: 1px solid #C9C6C1 !important;
-    border-radius: 8px !important;
+    border-radius: 9px !important;
     overflow: hidden !important;
 }
-
-/* Containers internos */
 
 [data-testid="stDataFrame"] > div {
     background-color: #FFFFFF !important;
 }
 
-/* Fundo da área da tabela */
-
-[data-testid="stDataFrame"] [role="grid"] {
-    background-color: #FFFFFF !important;
-}
-
-/* Canvas usado pelas versões recentes do Streamlit */
-
 [data-testid="stDataFrame"] canvas {
     background-color: #FFFFFF !important;
 }
 
-/* Área de rolagem */
-
-[data-testid="stDataFrame"] [data-testid="stDataFrameResizable"] {
+/* Tabelas HTML / Pandas Styler */
+.stDataFrame table, table {
     background-color: #FFFFFF !important;
-}
-
-
-/* =========================================================
-   TABELAS HTML
-   ========================================================= */
-
-table {
-    width: 100% !important;
-    background-color: #FFFFFF !important;
-    border-collapse: collapse !important;
     color: #4A4540 !important;
 }
 
-thead {
-    background-color: #D6D3CE !important;
-}
-
-th {
+.stDataFrame th, table th {
     background-color: #D6D3CE !important;
     color: #4A4540 !important;
     font-weight: 700 !important;
-    border: 1px solid #C9C6C1 !important;
-    padding: 10px !important;
+    border-color: #C9C6C1 !important;
 }
 
-td {
+.stDataFrame td, table td {
     background-color: #FFFFFF !important;
     color: #4A4540 !important;
-    border: 1px solid #E2E0DD !important;
-    padding: 8px !important;
+    border-color: #E2E0DD !important;
 }
-
-tr:nth-child(even) td {
-    background-color: #F5F3EF !important;
-}
-
-tr:hover td {
-    background-color: #E8E5E0 !important;
-}
-
 
 /* =========================================================
    BARRAS DE ROLAGEM
@@ -309,6 +319,17 @@ tr:hover td {
     background: #9C7B63 !important;
 }
 
+
+/* =========================================================
+   GRÁFICOS NATIVOS DO STREAMLIT
+   ========================================================= */
+
+[data-testid="stVegaLiteChart"] {
+    background-color: #FFFFFF !important;
+    border: 1px solid #E2E0DD !important;
+    border-radius: 9px !important;
+    padding: 8px !important;
+}
 
 /* =========================================================
    EXPANDERS
@@ -1429,7 +1450,7 @@ if page == "🏠 Painel DDH":
             "Equipe","Nome","Metros","Recuperado",
             "Recuperação %","Horas Operação","ROP (m/h)"
         ]
-        st.dataframe(show.round(2), use_container_width=True, hide_index=True)
+        tabela_clara(show.round(2), use_container_width=True, hide_index=True)
 
     st.divider()
     st.subheader("🔩 Produção por Sonda")
@@ -1482,7 +1503,7 @@ if page == "🏠 Painel DDH":
             "Recuperado","Recuperação %","Horas Operação","ROP (m/h)"
         ]
 
-        st.dataframe(final.round(2), use_container_width=True, hide_index=True)
+        tabela_clara(final.round(2), use_container_width=True, hide_index=True)
 
         if not final.empty:
             st.subheader("📊 Produção das Sondas")
@@ -1579,7 +1600,7 @@ elif page == "📝 Novo Boletim":
         st.subheader(f"📋 Lançamentos do Boletim #{bid}")
 
         with st.expander("ℹ️ Dados do Boletim", expanded=True):
-            st.dataframe(bd, use_container_width=True, hide_index=True)
+            tabela_clara(bd, use_container_width=True, hide_index=True)
 
         st.subheader("⛏️ Manobras e Perfuração")
         dfm = query(
@@ -1639,7 +1660,7 @@ elif page == "📝 Novo Boletim":
                 view["recuperado_m"] /
                 view["Avanço"].replace(0, pd.NA) * 100
             ).fillna(0)
-            st.dataframe(view.round(2), use_container_width=True, hide_index=True)
+            tabela_clara(view.round(2), use_container_width=True, hide_index=True)
 
             excluir_manobra = st.selectbox(
                 "Excluir manobra",
@@ -1706,7 +1727,7 @@ elif page == "📝 Novo Boletim":
         """, (bid,))
 
         if not dfa.empty:
-            st.dataframe(dfa, use_container_width=True, hide_index=True)
+            tabela_clara(dfa, use_container_width=True, hide_index=True)
             excluir_ap = st.selectbox(
                 "Excluir atividade",
                 dfa["id"].tolist(),
@@ -1806,14 +1827,14 @@ elif page == "📅 Produção Diária":
             )
             por_equipe["Recuperação %"] = (por_equipe["Recuperado"] / por_equipe["Metros"].replace(0,pd.NA)*100).fillna(0)
             por_equipe = por_equipe.sort_values("Metros", ascending=False)
-            st.dataframe(por_equipe.round(2), use_container_width=True, hide_index=True)
+            tabela_clara(por_equipe.round(2), use_container_width=True, hide_index=True)
             st.bar_chart(por_equipe.set_index("equipe")[["Metros"]])
 
             st.divider()
             st.subheader("📋 Detalhamento dos Boletins do Dia")
             detalhe = diaria[["data","equipe","nome_equipe","sonda","furo","metros","recuperado","Recuperação %"]].copy()
             detalhe.columns = ["Data","Equipe","Nome da Equipe","Sonda","Furo","Metros","Recuperado","Recuperação %"]
-            st.dataframe(detalhe.round(2), use_container_width=True, hide_index=True)
+            tabela_clara(detalhe.round(2), use_container_width=True, hide_index=True)
 
             st.divider()
             st.subheader("📈 Produção diária recente")
@@ -1868,12 +1889,12 @@ elif page == "📊 Relatórios e Excel":
 
         st.subheader("📅 Produção por Semana")
         semanal_view=base_rel.groupby("semana",as_index=False)["metros"].sum().sort_values("semana")
-        st.dataframe(semanal_view,use_container_width=True,hide_index=True)
+        tabela_clara(semanal_view,use_container_width=True,hide_index=True)
         st.bar_chart(semanal_view.set_index("semana"))
 
         st.subheader("📆 Produção por Mês")
         mensal_view=base_rel.groupby("mes",as_index=False)["metros"].sum().sort_values("mes")
-        st.dataframe(mensal_view,use_container_width=True,hide_index=True)
+        tabela_clara(mensal_view,use_container_width=True,hide_index=True)
         st.bar_chart(mensal_view.set_index("mes"))
 
         st.divider()
@@ -1906,7 +1927,7 @@ elif page == "📋 Boletins Salvos":
     if df.empty:
         st.info("Nenhum boletim salvo.")
     else:
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        tabela_clara(df, use_container_width=True, hide_index=True)
 
         bid = st.selectbox(
             "Selecione um boletim",
@@ -1953,7 +1974,7 @@ elif page == "👷 Colaboradores":
 
     with t1:
         df = query("SELECT * FROM colaboradores ORDER BY nome")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        tabela_clara(df, use_container_width=True, hide_index=True)
 
         if not df.empty:
             idx = st.selectbox(
@@ -2049,7 +2070,7 @@ elif page == "👥 Equipes":
                 st.error("Informe código e nome.")
 
         st.divider()
-        st.dataframe(
+        tabela_clara(
             query("SELECT * FROM equipes ORDER BY codigo"),
             use_container_width=True,
             hide_index=True
@@ -2105,7 +2126,7 @@ elif page == "🔩 Sondas":
                 st.error("Informe o código.")
 
         st.divider()
-        st.dataframe(
+        tabela_clara(
             query("""
                 SELECT s.*,e.codigo equipe
                 FROM sondas s
@@ -2174,7 +2195,7 @@ elif page == "⚙️ Cadastros":
         if df_furos.empty:
             st.info("Nenhum furo cadastrado.")
         else:
-            st.dataframe(df_furos, use_container_width=True, hide_index=True)
+            tabela_clara(df_furos, use_container_width=True, hide_index=True)
             st.divider()
             st.subheader("🗑️ Excluir Furo")
 
@@ -2213,7 +2234,7 @@ elif page == "⚙️ Cadastros":
     with tab_a:
         st.caption("Cadastre ou atualize os códigos de atividades.")
         df = query("SELECT * FROM atividades ORDER BY codigo")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        tabela_clara(df, use_container_width=True, hide_index=True)
 
         st.divider()
         st.subheader("➕ Cadastrar / Atualizar Atividade")
@@ -2311,7 +2332,7 @@ elif page == "🕳️ Cadastro de Furos":
     if df_furos.empty:
         st.info("Nenhum furo cadastrado.")
     else:
-        st.dataframe(df_furos, use_container_width=True, hide_index=True)
+        tabela_clara(df_furos, use_container_width=True, hide_index=True)
 
 # ============================================================
 # CONSULTA DE ATIVIDADES - PERFIL CAMPO
@@ -2336,7 +2357,7 @@ elif page == "📖 Consultar Atividades":
             )
             df_atividades = df_atividades[mascara]
 
-        st.dataframe(df_atividades, use_container_width=True, hide_index=True)
+        tabela_clara(df_atividades, use_container_width=True, hide_index=True)
         st.caption(f"{len(df_atividades)} atividade(s) encontrada(s).")
 
 # ============================================================
@@ -2391,7 +2412,7 @@ elif page == "🛠️ Gerenciamento":
                 "Código","Equipe","Supervisor","Sondador",
                 "Auxiliar 1","Auxiliar 2","Status"
             ]
-            st.dataframe(resumo, use_container_width=True, hide_index=True)
+            tabela_clara(resumo, use_container_width=True, hide_index=True)
 
         st.divider()
         sondas_resumo = query("""
@@ -2401,7 +2422,7 @@ elif page == "🛠️ Gerenciamento":
             LEFT JOIN equipes e ON e.id=s.equipe_id
             ORDER BY e.codigo,s.codigo
         """)
-        st.dataframe(sondas_resumo, use_container_width=True, hide_index=True)
+        tabela_clara(sondas_resumo, use_container_width=True, hide_index=True)
 
     with tab_equipes:
         if df_equipes.empty:
@@ -2447,7 +2468,7 @@ elif page == "🛠️ Gerenciamento":
                     })
 
             if membros:
-                st.dataframe(pd.DataFrame(membros), use_container_width=True, hide_index=True)
+                tabela_clara(pd.DataFrame(membros), use_container_width=True, hide_index=True)
 
             novo_status = st.selectbox(
                 "Novo status",
@@ -2493,7 +2514,7 @@ elif page == "🛠️ Gerenciamento":
         if df_sondas.empty:
             st.info("Nenhuma sonda cadastrada.")
         else:
-            st.dataframe(df_sondas, use_container_width=True, hide_index=True)
+            tabela_clara(df_sondas, use_container_width=True, hide_index=True)
 
             sonda_id = st.selectbox(
                 "Selecione uma sonda",
@@ -2574,7 +2595,7 @@ elif page == "🛠️ Gerenciamento":
                 "Recuperação %","Horas Operação","ROP (m/h)"
             ]
 
-            st.dataframe(mostrar.round(2), use_container_width=True, hide_index=True)
+            tabela_clara(mostrar.round(2), use_container_width=True, hide_index=True)
             st.bar_chart(mostrar[["Equipe","Metros"]].set_index("Equipe"))
             st.bar_chart(
                 mostrar[["Equipe","ROP (m/h)"]].set_index("Equipe")
@@ -2608,7 +2629,7 @@ elif page == "🛠️ Gerenciamento":
             if boletins.empty:
                 st.info("Nenhum boletim encontrado para esta equipe.")
             else:
-                st.dataframe(boletins, use_container_width=True, hide_index=True)
+                tabela_clara(boletins, use_container_width=True, hide_index=True)
                 boletim_id = st.selectbox(
                     "Abrir boletim",
                     boletins["id"].tolist(),
@@ -2669,7 +2690,7 @@ elif page == "💾 Backup":
             "Data": datetime.fromtimestamp(x.stat().st_mtime).strftime("%d/%m/%Y %H:%M:%S"),
             "Tamanho (KB)": round(x.stat().st_size / 1024, 1)
         } for x in backups])
-        st.dataframe(tabela, use_container_width=True, hide_index=True)
+        tabela_clara(tabela, use_container_width=True, hide_index=True)
 
         escolhido = st.selectbox("Selecionar backup para baixar", [x.name for x in backups])
         arq_escolhido = BACKUP_DIR / escolhido
@@ -2727,7 +2748,7 @@ elif page == "👤 Usuários":
             LEFT JOIN equipes e ON e.id=u.equipe_id
             ORDER BY u.nome
         """)
-        st.dataframe(usuarios, use_container_width=True, hide_index=True)
+        tabela_clara(usuarios, use_container_width=True, hide_index=True)
 
         if not usuarios.empty:
             uid = st.selectbox(
