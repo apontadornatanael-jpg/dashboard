@@ -1,5 +1,7 @@
 import streamlit as st
-import sqlite3
+import sqlite3  # usado apenas pelo backup legado e pela migração inicial
+import psycopg2
+import json
 import pandas as pd
 import re
 import hashlib
@@ -313,7 +315,7 @@ PAGES_CAMPO = [
 ]
 
 # ============================================================
-# FUNÇÕES BÁSICAS
+# FUNÇÕES BÁSICAS / POSTGRESQL
 # ============================================================
 def hash_senha(senha):
     return hashlib.sha256(senha.encode("utf-8")).hexdigest()
@@ -321,104 +323,45 @@ def hash_senha(senha):
 def verificar_senha(senha, senha_hash):
     return hash_senha(senha) == senha_hash
 
+POSTGRES_URL = st.secrets.get("POSTGRES_URL", os.getenv("POSTGRES_URL", ""))
+if not POSTGRES_URL:
+    st.error("Banco PostgreSQL não configurado. Adicione POSTGRES_URL nos Secrets do Streamlit.")
+    st.stop()
+
 def conn():
-    c = sqlite3.connect(DB, check_same_thread=False, timeout=30)
-    c.execute("PRAGMA foreign_keys = ON")
-    return c
+    return psycopg2.connect(POSTGRES_URL, connect_timeout=15)
 
-# ============================================================
-# BACKUP DO BANCO SQLITE
-# ============================================================
-def criar_backup(prefixo="backup"):
-    """Cria um backup consistente do SQLite usando a API nativa de backup."""
-    if not Path(DB).exists():
+def _sql_pg(sql):
+    """Converte os placeholders usados pelo SQLite (?) para PostgreSQL (%s)."""
+    return sql.replace("?", "%s")
+
+def _normalizar_valor(v):
+    if pd.isna(v):
         return None
-    agora = datetime.now().strftime("%Y%m%d_%H%M%S")
-    destino = BACKUP_DIR / f"{prefixo}_ddh_{agora}.db"
-    origem = sqlite3.connect(DB, timeout=30)
-    destino_conn = sqlite3.connect(str(destino))
-    try:
-        origem.backup(destino_conn)
-        destino_conn.commit()
-    finally:
-        destino_conn.close()
-        origem.close()
-
-    # Mantém os 30 backups automáticos mais recentes.
-    if prefixo == "auto":
-        antigos = sorted(BACKUP_DIR.glob("auto_ddh_*.db"), key=lambda x: x.stat().st_mtime, reverse=True)
-        for arq in antigos[30:]:
-            try:
-                arq.unlink()
-            except OSError:
-                pass
-    return destino
-
-def backup_automatico():
-    """Evita criar vários backups automáticos no mesmo intervalo de 15 minutos."""
-    if not Path(DB).exists():
-        return None
-    marcador = BACKUP_DIR / "ultimo_backup_auto.txt"
-    agora = datetime.now()
-    try:
-        if marcador.exists():
-            ultima = datetime.fromisoformat(marcador.read_text(encoding="utf-8").strip())
-            if (agora - ultima).total_seconds() < 900:
-                return None
-    except Exception:
-        pass
-    destino = criar_backup("auto")
-    if destino:
-        marcador.write_text(agora.isoformat(), encoding="utf-8")
-    return destino
-
-def bytes_backup_atual():
-    """Gera uma cópia consistente do banco para download."""
-    if not Path(DB).exists():
-        return b""
-    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
-        tmp_path = tmp.name
-    try:
-        origem = sqlite3.connect(DB, timeout=30)
-        destino = sqlite3.connect(tmp_path)
-        try:
-            origem.backup(destino)
-            destino.commit()
-        finally:
-            destino.close()
-            origem.close()
-        return Path(tmp_path).read_bytes()
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-
-def validar_backup_sqlite(caminho):
-    teste = sqlite3.connect(str(caminho))
-    try:
-        teste.execute("PRAGMA schema_version").fetchone()
-        teste.execute("PRAGMA integrity_check").fetchone()
-        return True
-    finally:
-        teste.close()
+    return v
 
 def query(sql, params=()):
     c = conn()
     try:
-        return pd.read_sql_query(sql, c, params=params)
+        return pd.read_sql_query(_sql_pg(sql), c, params=params)
     finally:
         c.close()
 
 def execute(sql, params=()):
-    # Proteção: cria backup automático antes da primeira alteração do período.
-    backup_automatico()
     c = conn()
     try:
         cur = c.cursor()
-        cur.execute(sql, params)
+        sql_pg = _sql_pg(sql)
+        is_insert = sql_pg.lstrip().upper().startswith("INSERT")
+        if is_insert and " RETURNING " not in sql_pg.upper():
+            sql_pg = sql_pg.rstrip().rstrip(";") + " RETURNING id"
+        cur.execute(sql_pg, params)
+        novo_id = cur.fetchone()[0] if is_insert else None
         c.commit()
-        return cur.lastrowid
+        return novo_id
+    except Exception:
+        c.rollback()
+        raise
     finally:
         c.close()
 
@@ -467,6 +410,140 @@ def safe_name(df, col, idv):
     return "" if row.empty else str(row.iloc[0][col])
 
 # ============================================================
+# BACKUP LÓGICO DO POSTGRESQL
+# ============================================================
+BACKUP_TABLES = [
+    "colaboradores", "equipes", "sondas", "furos", "atividades",
+    "boletins", "manobras", "apontamentos", "usuarios"
+]
+
+def _backup_payload():
+    payload = {
+        "formato": "DDH_CAMPO_POSTGRESQL_BACKUP",
+        "versao": 1,
+        "criado_em": datetime.now().isoformat(),
+        "tabelas": {}
+    }
+    for tabela in BACKUP_TABLES:
+        df = query(f"SELECT * FROM {tabela} ORDER BY id" if tabela != "atividades" else "SELECT * FROM atividades ORDER BY codigo")
+        payload["tabelas"][tabela] = [
+            {k: _normalizar_valor(v) for k, v in row.items()}
+            for row in df.to_dict(orient="records")
+        ]
+    return payload
+
+def criar_backup(prefixo="backup"):
+    agora = datetime.now().strftime("%Y%m%d_%H%M%S")
+    destino = BACKUP_DIR / f"{prefixo}_ddh_{agora}.json"
+    destino.write_text(json.dumps(_backup_payload(), ensure_ascii=False, default=str, indent=2), encoding="utf-8")
+    if prefixo == "auto":
+        antigos = sorted(BACKUP_DIR.glob("auto_ddh_*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
+        for arq in antigos[30:]:
+            try:
+                arq.unlink()
+            except OSError:
+                pass
+    return destino
+
+def backup_automatico():
+    marcador = BACKUP_DIR / "ultimo_backup_auto.txt"
+    agora = datetime.now()
+    try:
+        if marcador.exists():
+            ultima = datetime.fromisoformat(marcador.read_text(encoding="utf-8").strip())
+            if (agora - ultima).total_seconds() < 900:
+                return None
+    except Exception:
+        pass
+    destino = criar_backup("auto")
+    marcador.write_text(agora.isoformat(), encoding="utf-8")
+    return destino
+
+def bytes_backup_atual():
+    return json.dumps(_backup_payload(), ensure_ascii=False, default=str, indent=2).encode("utf-8")
+
+def validar_backup_postgres(caminho):
+    payload = json.loads(Path(caminho).read_text(encoding="utf-8"))
+    if payload.get("formato") != "DDH_CAMPO_POSTGRESQL_BACKUP":
+        raise ValueError("Arquivo de backup inválido.")
+    tabelas = payload.get("tabelas")
+    if not isinstance(tabelas, dict):
+        raise ValueError("Estrutura de backup inválida.")
+    return payload
+
+def restaurar_backup_postgres(caminho):
+    payload = validar_backup_postgres(caminho)
+    tabelas = payload["tabelas"]
+    c = conn()
+    try:
+        cur = c.cursor()
+        cur.execute("TRUNCATE TABLE apontamentos, manobras, boletins, usuarios, sondas, equipes, furos, colaboradores, atividades RESTART IDENTITY CASCADE")
+        for tabela in BACKUP_TABLES:
+            rows = tabelas.get(tabela, [])
+            if not rows:
+                continue
+            cols = list(rows[0].keys())
+            placeholders = ",".join(["%s"] * len(cols))
+            sql = f'INSERT INTO {tabela} ({",".join(cols)}) VALUES ({placeholders})'
+            values = [tuple(row.get(col) for col in cols) for row in rows]
+            cur.executemany(sql, values)
+        # Reajusta as sequências após restaurar IDs explícitos.
+        for tabela in ["colaboradores", "equipes", "sondas", "furos", "boletins", "manobras", "apontamentos", "usuarios"]:
+            cur.execute("SELECT pg_get_serial_sequence(%s, 'id')", (tabela,))
+            seq = cur.fetchone()[0]
+            if seq:
+                cur.execute(f"SELECT setval('{seq}', COALESCE((SELECT MAX(id) FROM {tabela}), 1), true)")
+        c.commit()
+    except Exception:
+        c.rollback()
+        raise
+    finally:
+        c.close()
+
+
+def migrar_sqlite_para_postgres(caminho_sqlite):
+    """Migra todas as tabelas do backup SQLite para o PostgreSQL preservando IDs."""
+    origem = sqlite3.connect(str(caminho_sqlite))
+    origem.row_factory = sqlite3.Row
+    destino = conn()
+    try:
+        # Confirma que o arquivo possui as tabelas esperadas.
+        existentes = {r[0] for r in origem.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        faltando = [t for t in BACKUP_TABLES if t not in existentes]
+        if faltando:
+            raise ValueError(f"Backup SQLite incompleto. Tabelas ausentes: {', '.join(faltando)}")
+
+        cur = destino.cursor()
+        # Segurança: não sobrescreve um PostgreSQL já utilizado sem confirmação explícita.
+        for tabela in ["colaboradores", "equipes", "sondas", "furos", "boletins", "manobras", "apontamentos"]:
+            cur.execute(f"SELECT COUNT(*) FROM {tabela}")
+            if cur.fetchone()[0] > 0:
+                raise ValueError("O PostgreSQL já possui dados operacionais. A migração SQLite só pode ser feita antes do primeiro uso.")
+
+        for tabela in BACKUP_TABLES:
+            rows = origem.execute(f"SELECT * FROM {tabela}").fetchall()
+            if not rows:
+                continue
+            cols = rows[0].keys()
+            placeholders = ",".join(["%s"] * len(cols))
+            sql = f'INSERT INTO {tabela} ({",".join(cols)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING'
+            valores = [tuple(row[c] for c in cols) for row in rows]
+            cur.executemany(sql, valores)
+
+        for tabela in ["colaboradores", "equipes", "sondas", "furos", "boletins", "manobras", "apontamentos", "usuarios"]:
+            cur.execute("SELECT pg_get_serial_sequence(%s, 'id')", (tabela,))
+            seq = cur.fetchone()[0]
+            if seq:
+                cur.execute(f"SELECT setval('{seq}', COALESCE((SELECT MAX(id) FROM {tabela}), 1), true)")
+        destino.commit()
+    except Exception:
+        destino.rollback()
+        raise
+    finally:
+        origem.close()
+        destino.close()
+
+# ============================================================
 # BANCO DE DADOS
 # ============================================================
 def seed_activities():
@@ -501,9 +578,10 @@ def seed_activities():
     ]
     c = conn()
     try:
-        c.executemany("""
+        cur = c.cursor()
+        cur.executemany("""
             INSERT INTO atividades(codigo,grupo,atividade,classificacao)
-            VALUES(?,?,?,?)
+            VALUES(%s,%s,%s,%s)
             ON CONFLICT(codigo) DO NOTHING
         """, rows)
         c.commit()
@@ -512,129 +590,62 @@ def seed_activities():
 
 def init_db():
     c = conn()
-    cur = c.cursor()
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS colaboradores(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        funcao TEXT,
-        matricula TEXT,
-        status TEXT DEFAULT 'Ativo'
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS equipes(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        codigo TEXT UNIQUE NOT NULL,
-        nome TEXT NOT NULL,
-        supervisor_id INTEGER,
-        sondador_id INTEGER,
-        auxiliar1_id INTEGER,
-        auxiliar2_id INTEGER,
-        status TEXT DEFAULT 'Ativa'
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS sondas(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        codigo TEXT UNIQUE NOT NULL,
-        modelo TEXT,
-        fabricante TEXT,
-        patrimonio TEXT,
-        equipe_id INTEGER,
-        status TEXT DEFAULT 'Operando'
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS furos(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        identificacao TEXT UNIQUE NOT NULL,
-        projeto TEXT,
-        cliente TEXT,
-        local TEXT,
-        coord_e REAL,
-        coord_n REAL,
-        cota REAL,
-        azimute REAL,
-        dip REAL,
-        status TEXT DEFAULT 'Em andamento'
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS atividades(
-        codigo INTEGER PRIMARY KEY,
-        grupo TEXT NOT NULL,
-        atividade TEXT NOT NULL,
-        classificacao TEXT NOT NULL
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS boletins(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data TEXT NOT NULL,
-        turno TEXT,
-        projeto TEXT,
-        cliente TEXT,
-        sonda_id INTEGER,
-        equipe_id INTEGER,
-        furo_id INTEGER,
-        horimetro_inicial REAL,
-        horimetro_final REAL,
-        observacoes TEXT,
-        criado_em TEXT
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS manobras(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        boletim_id INTEGER NOT NULL,
-        numero INTEGER,
-        de_m REAL,
-        ate_m REAL,
-        recuperado_m REAL,
-        dip REAL,
-        qaqc TEXT,
-        perfil TEXT,
-        coroa TEXT,
-        revestimento TEXT,
-        fluido TEXT,
-        FOREIGN KEY(boletim_id) REFERENCES boletins(id) ON DELETE CASCADE
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS apontamentos(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        boletim_id INTEGER NOT NULL,
-        codigo_atividade INTEGER,
-        hora_inicio TEXT,
-        hora_fim TEXT,
-        horas REAL,
-        horimetro REAL,
-        observacao TEXT,
-        FOREIGN KEY(boletim_id) REFERENCES boletins(id) ON DELETE CASCADE
-    )""")
-
-    cur.execute("""CREATE TABLE IF NOT EXISTS usuarios(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome TEXT NOT NULL,
-        usuario TEXT UNIQUE NOT NULL,
-        senha TEXT NOT NULL,
-        nivel TEXT NOT NULL,
-        equipe_id INTEGER,
-        status TEXT DEFAULT 'Ativo',
-        criado_em TEXT
-    )""")
-
-    c.commit()
-    c.close()
+    try:
+        cur = c.cursor()
+        cur.execute("""CREATE TABLE IF NOT EXISTS colaboradores(
+            id BIGSERIAL PRIMARY KEY, nome TEXT NOT NULL, funcao TEXT, matricula TEXT,
+            status TEXT DEFAULT 'Ativo'
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS equipes(
+            id BIGSERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, nome TEXT NOT NULL,
+            supervisor_id BIGINT, sondador_id BIGINT, auxiliar1_id BIGINT, auxiliar2_id BIGINT,
+            status TEXT DEFAULT 'Ativa'
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS sondas(
+            id BIGSERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, modelo TEXT, fabricante TEXT,
+            patrimonio TEXT, equipe_id BIGINT, status TEXT DEFAULT 'Operando'
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS furos(
+            id BIGSERIAL PRIMARY KEY, identificacao TEXT UNIQUE NOT NULL, projeto TEXT, cliente TEXT,
+            local TEXT, coord_e DOUBLE PRECISION, coord_n DOUBLE PRECISION, cota DOUBLE PRECISION,
+            azimute DOUBLE PRECISION, dip DOUBLE PRECISION, status TEXT DEFAULT 'Em andamento'
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS atividades(
+            codigo INTEGER PRIMARY KEY, grupo TEXT NOT NULL, atividade TEXT NOT NULL,
+            classificacao TEXT NOT NULL
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS boletins(
+            id BIGSERIAL PRIMARY KEY, data TEXT NOT NULL, turno TEXT, projeto TEXT, cliente TEXT,
+            sonda_id BIGINT, equipe_id BIGINT, furo_id BIGINT, horimetro_inicial DOUBLE PRECISION,
+            horimetro_final DOUBLE PRECISION, observacoes TEXT, criado_em TEXT
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS manobras(
+            id BIGSERIAL PRIMARY KEY, boletim_id BIGINT NOT NULL REFERENCES boletins(id) ON DELETE CASCADE,
+            numero INTEGER, de_m DOUBLE PRECISION, ate_m DOUBLE PRECISION, recuperado_m DOUBLE PRECISION,
+            dip DOUBLE PRECISION, qaqc TEXT, perfil TEXT, coroa TEXT, revestimento TEXT, fluido TEXT
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS apontamentos(
+            id BIGSERIAL PRIMARY KEY, boletim_id BIGINT NOT NULL REFERENCES boletins(id) ON DELETE CASCADE,
+            codigo_atividade INTEGER, hora_inicio TEXT, hora_fim TEXT, horas DOUBLE PRECISION,
+            horimetro DOUBLE PRECISION, observacao TEXT
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS usuarios(
+            id BIGSERIAL PRIMARY KEY, nome TEXT NOT NULL, usuario TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL, nivel TEXT NOT NULL, equipe_id BIGINT,
+            status TEXT DEFAULT 'Ativo', criado_em TEXT
+        )""")
+        c.commit()
+    finally:
+        c.close()
 
     seed_activities()
-
-    # Usuário padrão, criado apenas se ainda não existir.
     if query("SELECT COUNT(*) AS total FROM usuarios WHERE usuario='admin'").iloc[0]["total"] == 0:
         execute("""
             INSERT INTO usuarios(nome,usuario,senha,nivel,status,criado_em)
             VALUES(?,?,?,?,?,?)
         """, (
-            "Administrador",
-            "admin",
-            hash_senha("admin123"),
-            "Administrador",
-            "Ativo",
-            datetime.now().isoformat()
+            "Administrador", "admin", hash_senha("admin123"),
+            "Administrador", "Ativo", datetime.now().isoformat()
         ))
 
 init_db()
@@ -2453,45 +2464,36 @@ elif page == "🛠️ Gerenciamento":
 # ============================================================
 elif page == "💾 Backup":
     st.title("💾 BACKUP E SEGURANÇA DO BANCO")
-    st.caption("Faça cópias do banco DDH e mantenha uma cópia segura fora do servidor.")
+    st.caption("O DDH Campo está conectado ao PostgreSQL. Os backups abaixo são cópias lógicas em JSON.")
 
     if nivel != "Administrador":
         st.error("Apenas administradores podem acessar o backup do banco.")
         st.stop()
 
-    if Path(DB).exists():
-        tamanho = Path(DB).stat().st_size / 1024
-        st.metric("Banco atual", f"{tamanho:.1f} KB")
-    else:
-        st.warning("O banco ddh.db ainda não foi encontrado.")
+    try:
+        total_tabelas = sum(int(query(f"SELECT COUNT(*) AS total FROM {t}").iloc[0]["total"]) for t in BACKUP_TABLES)
+        st.metric("Registros no banco", total_tabelas)
+    except Exception as e:
+        st.error(f"Não foi possível consultar o PostgreSQL: {e}")
 
     c1, c2 = st.columns(2)
     with c1:
         if st.button("💾 Criar backup agora", type="primary", use_container_width=True):
             arq = criar_backup("manual")
-            if arq:
-                st.success(f"Backup criado: {arq.name}")
-            else:
-                st.error("Não foi possível criar o backup porque o banco não foi encontrado.")
+            st.success(f"Backup criado: {arq.name}")
     with c2:
         dados = bytes_backup_atual()
         st.download_button(
             "📥 Baixar cópia atual do banco",
             data=dados,
-            file_name=f"ddh_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
-            mime="application/octet-stream",
-            use_container_width=True,
-            disabled=not bool(dados)
+            file_name=f"ddh_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+            use_container_width=True
         )
 
     st.divider()
     st.subheader("📚 Backups disponíveis no servidor")
-    backups = sorted(
-        [x for x in BACKUP_DIR.glob("*.db")],
-        key=lambda x: x.stat().st_mtime,
-        reverse=True
-    )
-
+    backups = sorted(BACKUP_DIR.glob("*.json"), key=lambda x: x.stat().st_mtime, reverse=True)
     if backups:
         tabela = pd.DataFrame([{
             "Arquivo": x.name,
@@ -2499,31 +2501,48 @@ elif page == "💾 Backup":
             "Tamanho (KB)": round(x.stat().st_size / 1024, 1)
         } for x in backups])
         st.dataframe(tabela, use_container_width=True, hide_index=True)
-
         escolhido = st.selectbox("Selecionar backup para baixar", [x.name for x in backups])
         arq_escolhido = BACKUP_DIR / escolhido
-        st.download_button(
-            "📥 Baixar backup selecionado",
-            data=arq_escolhido.read_bytes(),
-            file_name=arq_escolhido.name,
-            mime="application/octet-stream"
-        )
+        st.download_button("📥 Baixar backup selecionado", data=arq_escolhido.read_bytes(),
+                           file_name=arq_escolhido.name, mime="application/json")
     else:
         st.info("Nenhum backup criado ainda.")
 
     st.divider()
-    st.subheader("♻️ Restaurar backup")
-    st.warning("A restauração substitui o banco atual. Antes de restaurar, o sistema cria uma cópia de segurança do banco atual.")
-    upload = st.file_uploader("Enviar arquivo de backup .db", type=["db"], key="restore_db_upload")
-    confirmar = st.checkbox("Confirmo que desejo substituir o banco atual", key="confirmar_restore")
-    if st.button("♻️ Restaurar backup enviado", type="secondary", disabled=not(upload and confirmar)):
+    st.subheader("🔄 Migrar dados do SQLite para PostgreSQL")
+    st.caption("Use somente uma vez, logo após a primeira implantação no PostgreSQL. Envie a cópia ddh.db do sistema antigo.")
+    sqlite_upload = st.file_uploader("Enviar backup SQLite .db para migração", type=["db"], key="migrar_sqlite_upload")
+    confirmar_sqlite = st.checkbox("Confirmo que desejo migrar este SQLite para o PostgreSQL", key="confirmar_migrar_sqlite")
+    if st.button("🚀 Migrar SQLite para PostgreSQL", type="primary", disabled=not(sqlite_upload and confirmar_sqlite)):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            tmp.write(sqlite_upload.getvalue())
+            tmp_path = Path(tmp.name)
+        try:
+            migrar_sqlite_para_postgres(tmp_path)
+            st.success("Migração concluída com sucesso! Os dados agora estão no PostgreSQL.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Não foi possível migrar o SQLite: {e}")
+        finally:
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+
+    st.divider()
+    st.subheader("♻️ Restaurar backup PostgreSQL")
+    st.warning("A restauração substitui os dados atuais. Antes de restaurar, o sistema cria um backup automático.")
+    upload = st.file_uploader("Enviar arquivo de backup .json", type=["json"], key="restore_pg_upload")
+    confirmar = st.checkbox("Confirmo que desejo substituir os dados atuais", key="confirmar_restore_pg")
+    if st.button("♻️ Restaurar backup enviado", type="secondary", disabled=not(upload and confirmar)):
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
             tmp.write(upload.getvalue())
             tmp_path = Path(tmp.name)
         try:
-            validar_backup_sqlite(tmp_path)
+            validar_backup_postgres(tmp_path)
             criar_backup("antes_restauracao")
-            os.replace(str(tmp_path), DB)
+            restaurar_backup_postgres(tmp_path)
             st.success("Backup restaurado com sucesso. O aplicativo será reiniciado.")
             st.rerun()
         except Exception as e:
