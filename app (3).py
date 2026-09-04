@@ -76,7 +76,55 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+/* =========================================================
+   FORÇAR SELECTBOX CLARO (BaseWeb Select)
+   ========================================================= */
+div[data-baseweb="select"] > div {
+    background-color: #FFFFFF !important;
+    border-color: #C9C6C1 !important;
+}
 
+div[data-baseweb="select"] span, 
+div[data-baseweb="select"] input, 
+div[data-baseweb="select"] div {
+    color: #4A4540 !important;
+    background-color: transparent !important;
+}
+
+/* Menu suspenso (Dropdown list) do selectbox */
+ul[data-baseweb="menu"] {
+    background-color: #FFFFFF !important;
+}
+
+ul[data-baseweb="menu"] li {
+    background-color: #FFFFFF !important;
+    color: #4A4540 !important;
+}
+
+ul[data-baseweb="menu"] li:hover {
+    background-color: #F5F3EF !important;
+}
+
+/* =========================================================
+   FORÇAR CABEÇALHOS E TABELAS (st.dataframe Glide Grid)
+   ========================================================= */
+[data-testid="stDataFrame"] {
+    background-color: #FFFFFF !important;
+}
+
+/* Forçar visualizador interno do dataframe */
+[data-testid="stDataFrame"] iframe, 
+[data-testid="stDataFrame"] canvas {
+    filter: none !important;
+}
+
+/* Forçar cabeçalho de tabelas HTML padrão e Styler */
+.stDataFrame table thead tr th, 
+table thead tr th {
+    background-color: #D6D3CE !important;
+    color: #4A4540 !important;
+    font-weight: 700 !important;
+}
 /* =========================================================
    PALETA DE CORES - BOA FORTUNA
    =========================================================
