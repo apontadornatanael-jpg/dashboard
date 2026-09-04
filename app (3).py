@@ -13,29 +13,31 @@ import os
 # TABELAS - TEMA CLARO
 # ============================================================
 def tabela_clara(data, *args, **kwargs):
-    """Força DataFrames do Streamlit a usar fundo claro e texto escuro."""
+    """Força tabelas a usarem HTML nativo com fundo claro e texto escuro de alto contraste."""
     if isinstance(data, pd.DataFrame):
         styler = (
             data.style
             .set_properties(**{
                 "background-color": "#FFFFFF",
-                "color": "#4A3540",
-                "border-color": "#E2E0DD",
-                "font-size": "13px"
+                "color": "#000000",
+                "border-color": "#C9C6C1",
+                "font-size": "13px",
+                "font-weight": "500"
             })
             .set_table_styles([
                 {
                     "selector": "th",
                     "props": [
-                        ("background-color", "#D6D3CE"),
-                        ("color", "#4A4540"),
-                        ("font-weight", "700"),
-                        ("border-color", "#C9C6C1")
+                        ("background-color", "#E2E0DD"),
+                        ("color", "#000000"),
+                        ("font-weight", "800"),
+                        ("border-color", "#C9C6C1"),
+                        ("font-size", "14px")
                     ]
                 },
                 {
                     "selector": "tbody tr:nth-child(even) td",
-                    "props": [("background-color", "#F5F3EF")]
+                    "props": [("background-color", "#F9F8F6")]
                 },
                 {
                     "selector": "tbody tr:hover td",
@@ -43,8 +45,10 @@ def tabela_clara(data, *args, **kwargs):
                 }
             ])
         )
-        return st.dataframe(styler, *args, **kwargs)
-    return st.dataframe(data, *args, **kwargs)
+        # st.table garante renderização HTML sem o fundo preto do Glide Canvas
+        return st.table(styler)
+    return st.table(data)
+
 
 # ============================================================
 # CONFIGURAÇÃO
@@ -55,15 +59,12 @@ BACKUP_DIR = BASE_DIR / "backups"
 BACKUP_DIR.mkdir(exist_ok=True)
 LOGO_PATH = BASE_DIR / "logo_ddh.png"
 
-# Tema claro para os componentes nativos do Streamlit.
-# Se o ambiente bloquear a alteração em tempo de execução, o CSS e os Styler
-# das tabelas continuam sendo aplicados normalmente.
 try:
     st.set_option("theme.base", "light")
     st.set_option("theme.primaryColor", "#B89572")
     st.set_option("theme.backgroundColor", "#F5F3EF")
     st.set_option("theme.secondaryBackgroundColor", "#FFFFFF")
-    st.set_option("theme.textColor", "#4A4540")
+    st.set_option("theme.textColor", "#000000")
 except Exception:
     pass
 
@@ -76,484 +77,124 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+
 /* =========================================================
-   FORÇAR SELECTBOX CLARO (BaseWeb Select)
+   FORÇAR SELECTBOX CLARO COM LETRAS PRETAS VIVAS
    ========================================================= */
+
+/* Fundo da caixa do Selectbox */
 div[data-baseweb="select"] > div {
     background-color: #FFFFFF !important;
-    border-color: #C9C6C1 !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 7px !important;
 }
 
-div[data-baseweb="select"] span, 
-div[data-baseweb="select"] input, 
-div[data-baseweb="select"] div {
-    color: #4A4540 !important;
-    background-color: transparent !important;
+/* Texto selecionado, opções e setas dentro do Selectbox */
+div[data-baseweb="select"] *, 
+div[data-baseweb="select"] input,
+div[data-baseweb="select"] span {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    font-weight: 700 !important;
 }
 
-/* Menu suspenso (Dropdown list) do selectbox */
+/* Menu suspenso (Opções ao clicar no selectbox) */
+div[data-baseweb="popover"],
 ul[data-baseweb="menu"] {
     background-color: #FFFFFF !important;
 }
 
-ul[data-baseweb="menu"] li {
+ul[data-baseweb="menu"] li,
+ul[data-baseweb="menu"] li * {
     background-color: #FFFFFF !important;
-    color: #4A4540 !important;
+    color: #000000 !important;
+    font-weight: 600 !important;
 }
 
 ul[data-baseweb="menu"] li:hover {
     background-color: #F5F3EF !important;
 }
 
+
 /* =========================================================
-   FORÇAR CABEÇALHOS E TABELAS (st.dataframe Glide Grid)
+   DATAFRAMES E TABELAS - CABEÇALHO E CORPO CLAROS
    ========================================================= */
-[data-testid="stDataFrame"] {
+
+/* Remove fundos escuros de containers de tabela */
+[data-testid="stDataFrame"],
+[data-testid="stTable"],
+.stTable {
     background-color: #FFFFFF !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
 }
 
-/* Forçar visualizador interno do dataframe */
-[data-testid="stDataFrame"] iframe, 
-[data-testid="stDataFrame"] canvas {
-    filter: none !important;
+/* Cabeçalho das tabelas (TH) com fundo claro e letra viva */
+.stTable th, 
+table th, 
+[data-testid="stTable"] th {
+    background-color: #E2E0DD !important;
+    color: #000000 !important;
+    font-weight: 800 !important;
+    font-size: 14px !important;
+    border-bottom: 2px solid #C9C6C1 !important;
 }
 
-/* Forçar cabeçalho de tabelas HTML padrão e Styler */
-.stDataFrame table thead tr th, 
-table thead tr th {
-    background-color: #D6D3CE !important;
-    color: #4A4540 !important;
-    font-weight: 700 !important;
+/* Células das tabelas (TD) */
+.stTable td, 
+table td, 
+[data-testid="stTable"] td {
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
+    font-weight: 500 !important;
+    border-color: #E2E0DD !important;
 }
-/* =========================================================
-   PALETA DE CORES - BOA FORTUNA
-   =========================================================
-
-   Fundo principal:     #F5F3EF
-   Fundo secundário:    #FFFFFF
-   Sidebar:             #D6D3CE
-   Texto principal:     #4A4540
-   Texto secundário:    #6E6761
-   Destaque:            #B89572
-   Destaque escuro:     #9C7B63
-   Bordas:              #C9C6C1
-   Linha clara:         #E2E0DD
-*/
 
 
 /* =========================================================
-   FUNDO PRINCIPAL
+   FUNDO PRINCIPAL E TEXTOS GERAIS
    ========================================================= */
 
-[data-testid="stAppViewContainer"] {
-    background-color: #F5F3EF !important;
-}
-
-.main {
-    background-color: #F5F3EF !important;
-}
-
-[data-testid="stMain"] {
-    background-color: #F5F3EF !important;
-}
-
+[data-testid="stAppViewContainer"],
+.main,
+[data-testid="stMain"],
 .block-container {
-    padding-top: 2rem !important;
     background-color: #F5F3EF !important;
 }
-
-
-/* =========================================================
-   BARRA LATERAL
-   ========================================================= */
 
 [data-testid="stSidebar"] {
     background-color: #D6D3CE !important;
 }
 
-[data-testid="stSidebar"] > div:first-child {
-    background-color: #D6D3CE !important;
-}
-
-/* Texto da sidebar */
-
 [data-testid="stSidebar"] * {
     color: #4A4540 !important;
 }
 
-
-/* =========================================================
-   TÍTULOS
-   ========================================================= */
-
-h1,
-h2,
-h3,
-h4 {
-    color: #4A4540 !important;
-    font-weight: 700 !important;
+h1, h2, h3, h4 {
+    color: #000000 !important;
+    font-weight: 800 !important;
 }
 
-
-/* =========================================================
-   TEXTOS GERAIS
-   ========================================================= */
-
-p,
-span,
-label,
-div {
-    color: #4A4540;
+p, span, label, div {
+    color: #222222;
 }
 
-
-/* =========================================================
-   MÉTRICAS
-   ========================================================= */
-
-[data-testid="stMetric"] {
-    background-color: #FFFFFF !important;
-    border: 1px solid #B89572 !important;
-    border-radius: 12px !important;
-    padding: 15px !important;
-    box-shadow: 0 2px 6px rgba(90, 80, 70, 0.10) !important;
-}
-
-[data-testid="stMetricLabel"] {
-    color: #6E6761 !important;
-}
-
-[data-testid="stMetricLabel"] * {
-    color: #6E6761 !important;
-}
-
-[data-testid="stMetricValue"] {
-    color: #4A4540 !important;
-    font-weight: 700 !important;
-}
-
-[data-testid="stMetricValue"] * {
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   BOTÕES
-   ========================================================= */
-
-.stButton > button {
-    background-color: #B89572 !important;
-    color: #FFFFFF !important;
-    border: none !important;
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-}
-
-.stButton > button * {
-    color: #FFFFFF !important;
-}
-
-.stButton > button:hover {
-    background-color: #A98260 !important;
-    color: #FFFFFF !important;
-    border: none !important;
-}
-
-
-/* BOTÃO PRINCIPAL */
-
-[data-testid="stBaseButton-primary"] {
-    background-color: #9C7B63 !important;
-    color: #FFFFFF !important;
-}
-
-[data-testid="stBaseButton-primary"] * {
-    color: #FFFFFF !important;
-}
-
-[data-testid="stBaseButton-primary"]:hover {
-    background-color: #856653 !important;
-}
-
-
-/* =========================================================
-   INPUTS
-   ========================================================= */
-
+/* Inputs de texto padrão */
 .stTextInput input,
 .stNumberInput input,
 .stDateInput input,
 .stTimeInput input,
 .stTextArea textarea {
     background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-    border: 1px solid #C9C6C1 !important;
-    border-radius: 7px !important;
-}
-
-
-/* =========================================================
-   SELECTBOX
-   ========================================================= */
-
-[data-baseweb="select"] > div {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-    border-color: #C9C6C1 !important;
-}
-
-[data-baseweb="select"] * {
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   DATAFRAMES E TABELAS - TEMA CLARO
-   ========================================================= */
-
-[data-testid="stDataFrame"] {
-    background-color: #FFFFFF !important;
-    border: 1px solid #C9C6C1 !important;
-    border-radius: 9px !important;
-    overflow: hidden !important;
-}
-
-[data-testid="stDataFrame"] > div {
-    background-color: #FFFFFF !important;
-}
-
-[data-testid="stDataFrame"] canvas {
-    background-color: #FFFFFF !important;
-}
-
-/* Tabelas HTML / Pandas Styler */
-.stDataFrame table, table {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-}
-
-.stDataFrame th, table th {
-    background-color: #D6D3CE !important;
-    color: #4A4540 !important;
-    font-weight: 700 !important;
-    border-color: #C9C6C1 !important;
-}
-
-.stDataFrame td, table td {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-    border-color: #E2E0DD !important;
-}
-
-/* =========================================================
-   BARRAS DE ROLAGEM
-   ========================================================= */
-
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: #F5F3EF !important;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #B89572 !important;
-    border-radius: 8px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #9C7B63 !important;
-}
-
-
-/* =========================================================
-   GRÁFICOS NATIVOS DO STREAMLIT
-   ========================================================= */
-
-[data-testid="stVegaLiteChart"] {
-    background-color: #FFFFFF !important;
-    border: 1px solid #E2E0DD !important;
-    border-radius: 9px !important;
-    padding: 8px !important;
-}
-
-/* =========================================================
-   EXPANDERS
-   ========================================================= */
-
-[data-testid="stExpander"] {
-    background-color: #FFFFFF !important;
-    border: 1px solid #C9C6C1 !important;
-    border-radius: 8px !important;
-}
-
-[data-testid="stExpander"] * {
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   ABAS
-   ========================================================= */
-
-button[data-baseweb="tab"] {
-    color: #6E6761 !important;
+    color: #000000 !important;
     font-weight: 600 !important;
-}
-
-button[data-baseweb="tab"][aria-selected="true"] {
-    color: #4A4540 !important;
-    border-bottom-color: #B89572 !important;
-}
-
-
-/* =========================================================
-   DIVISORES
-   ========================================================= */
-
-hr {
-    border-color: #D6D3CE !important;
-}
-
-
-/* =========================================================
-   ALERTAS
-   ========================================================= */
-
-[data-testid="stAlert"] {
-    border-radius: 8px !important;
-}
-
-
-/* =========================================================
-   HEADER DO STREAMLIT
-   ========================================================= */
-
-header[data-testid="stHeader"] {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    background-color: #F5F3EF !important;
-    z-index: 999999 !important;
-}
-
-
-/* =========================================================
-   CONTROLE PARA REABRIR SIDEBAR
-   ========================================================= */
-
-[data-testid="stSidebarCollapsedControl"],
-[data-testid="collapsedControl"] {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    z-index: 9999999 !important;
-}
-
-
-/* =========================================================
-   ESCONDE BOTÕES EXTRAS DO STREAMLIT
-   ========================================================= */
-
-[data-testid="stToolbarActions"] {
-    display: none !important;
-}
-
-[data-testid="stAppDeployButton"] {
-    display: none !important;
-}
-
-#MainMenu {
-    display: none !important;
-}
-
-[data-testid="stStatusWidget"] {
-    display: none !important;
-}
-
-
-/* =========================================================
-   MENU RADIO LATERAL
-   ========================================================= */
-
-[data-testid="stSidebar"] [role="radiogroup"] label {
-    background-color: rgba(255,255,255,0.70) !important;
+    border: 1px solid #C9C6C1 !important;
     border-radius: 7px !important;
-    padding: 6px 8px !important;
-    margin-bottom: 3px !important;
-    color: #4A4540 !important;
-}
-
-[data-testid="stSidebar"] [role="radiogroup"] label * {
-    color: #4A4540 !important;
-}
-
-[data-testid="stSidebar"] [role="radiogroup"] label:hover {
-    background-color: #C5C1BA !important;
-}
-
-
-/* Item selecionado */
-
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
-    background-color: #B89572 !important;
-}
-
-[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) * {
-    color: #FFFFFF !important;
-}
-
-
-/* =========================================================
-   CAPTIONS E TEXTOS SECUNDÁRIOS
-   ========================================================= */
-
-[data-testid="stCaptionContainer"] {
-    color: #6E6761 !important;
-}
-
-.stCaption,
-.stCaption * {
-    color: #6E6761 !important;
-}
-
-
-/* =========================================================
-   GRÁFICOS
-   ========================================================= */
-
-/* Container externo dos gráficos */
-
-[data-testid="stPlotlyChart"] {
-    background-color: #FFFFFF !important;
-    border-radius: 8px !important;
-}
-
-
-/* =========================================================
-   CONTAINERS
-   ========================================================= */
-
-[data-testid="stVerticalBlockBorderWrapper"] {
-    background-color: transparent !important;
-}
-
-
-/* =========================================================
-   CORREÇÃO FINAL - REMOVER FUNDOS ESCUROS
-   ========================================================= */
-
-[data-testid="stDataFrame"],
-[data-testid="stDataFrame"] > div,
-[data-testid="stDataFrame"] > div > div {
-    background-color: #FFFFFF !important;
 }
 
 </style>
 """, unsafe_allow_html=True)
-
 
 # ============================================================
 # SESSION STATE
