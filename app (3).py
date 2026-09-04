@@ -29,257 +29,142 @@ st.markdown("""
 <style>
 
 /* =========================================================
-   CORREÇÃO GERAL - REMOVE FUNDOS ESCUROS DO STREAMLIT
+   PALETA DE CORES - MARROM CLARO / CINZA CLARO
    ========================================================= */
 
-/* Fundo geral */
-html,
-body,
-[data-testid="stApp"],
-[data-testid="stAppViewContainer"],
-.main,
-.main .block-container {
+/* Fundo principal */
+[data-testid="stAppViewContainer"] {
     background-color: #F5F3EF !important;
+}
+
+/* Área principal */
+.main {
+    background-color: #F5F3EF !important;
+}
+
+/* Container principal */
+.block-container {
+    padding-top: 2rem;
+    background-color: #F5F3EF !important;
+}
+
+
+/* =========================================================
+   BARRA LATERAL - CINZA CLARO
+   ========================================================= */
+
+[data-testid="stSidebar"] {
+    background-color: #D6D3CE !important;
+}
+
+[data-testid="stSidebar"] > div:first-child {
+    background-color: #D6D3CE !important;
+}
+
+/* Texto da barra lateral */
+[data-testid="stSidebar"] * {
     color: #4A4540 !important;
 }
 
 
 /* =========================================================
-   CONTAINERS E BLOCOS
+   TÍTULOS
    ========================================================= */
 
-[data-testid="stVerticalBlock"],
-[data-testid="stHorizontalBlock"],
-[data-testid="stElementContainer"],
-[data-testid="stMainBlockContainer"],
-[data-testid="stMain"] {
-    background-color: transparent !important;
-    color: #4A4540 !important;
+h1, h2, h3 {
+    color: #6F5A4A !important;
+    font-weight: 700 !important;
 }
 
 
 /* =========================================================
-   CARDS E CONTAINERS COM BORDA
+   MÉTRICAS
    ========================================================= */
 
-[data-testid="stVerticalBlockBorderWrapper"],
-[data-testid="stContainer"] {
+[data-testid="stMetric"] {
     background-color: #FFFFFF !important;
-    border-color: #D1CEC8 !important;
+    border: 1px solid #B89572 !important;
+    border-radius: 12px !important;
+    padding: 15px !important;
+    box-shadow: 0 2px 6px rgba(90, 80, 70, 0.10) !important;
+}
+
+[data-testid="stMetricLabel"] {
+    color: #6E6761 !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #5F554D !important;
+    font-weight: 700 !important;
 }
 
 
 /* =========================================================
-   TODOS OS BOTÕES
+   BOTÕES
    ========================================================= */
 
-button {
+.stButton > button {
     background-color: #B89572 !important;
     color: #FFFFFF !important;
-    border-color: #B89572 !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
 }
 
-button:hover {
+.stButton > button:hover {
     background-color: #A98260 !important;
+    color: #FFFFFF !important;
+    border: none !important;
+}
+
+/* Botão principal */
+
+[data-testid="stBaseButton-primary"] {
+    background-color: #9C7B63 !important;
+    color: #FFFFFF !important;
+}
+
+[data-testid="stBaseButton-primary"]:hover {
+    background-color: #856653 !important;
     color: #FFFFFF !important;
 }
 
 
 /* =========================================================
-   BOTÕES SECUNDÁRIOS
+   INPUTS
    ========================================================= */
 
-button[kind="secondary"] {
-    background-color: #E2E0DC !important;
+.stTextInput input,
+.stNumberInput input,
+.stDateInput input,
+.stTimeInput input,
+.stTextArea textarea {
+    background-color: #FFFFFF !important;
     color: #4A4540 !important;
     border: 1px solid #C9C6C1 !important;
-}
-
-button[kind="secondary"]:hover {
-    background-color: #D1CEC8 !important;
-    color: #4A4540 !important;
+    border-radius: 7px !important;
 }
 
 
 /* =========================================================
-   SELECTBOX - FUNDO
+   SELECTBOX
    ========================================================= */
-
-[data-baseweb="select"] {
-    background-color: #FFFFFF !important;
-}
 
 [data-baseweb="select"] > div {
     background-color: #FFFFFF !important;
     color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   MENU ABERTO DO SELECTBOX
-   ========================================================= */
-
-[data-baseweb="popover"],
-[data-baseweb="menu"],
-[data-baseweb="menu"] ul,
-[role="listbox"] {
-    background-color: #F7F6F4 !important;
-    color: #4A4540 !important;
-}
-
-[role="option"] {
-    background-color: #F7F6F4 !important;
-    color: #4A4540 !important;
-}
-
-[role="option"]:hover,
-[role="option"][aria-selected="true"] {
-    background-color: #D6D3CE !important;
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   DATE PICKER / CALENDÁRIO
-   ========================================================= */
-
-[data-baseweb="calendar"],
-[data-baseweb="datepicker"],
-[role="dialog"] {
-    background-color: #F7F6F4 !important;
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   POPUPS E DIÁLOGOS
-   ========================================================= */
-
-[data-baseweb="popover"],
-[data-baseweb="modal"] {
-    background-color: #F7F6F4 !important;
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   INPUTS GERAIS
-   ========================================================= */
-
-input,
-textarea {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
     border-color: #C9C6C1 !important;
 }
 
 
 /* =========================================================
-   NUMBER INPUT - BOTÕES + / -
-   ========================================================= */
-
-[data-testid="stNumberInput"] button {
-    background-color: #E2E0DC !important;
-    color: #4A4540 !important;
-    border-color: #C9C6C1 !important;
-}
-
-[data-testid="stNumberInput"] button:hover {
-    background-color: #D1CEC8 !important;
-}
-
-
-/* =========================================================
-   CHECKBOX
-   ========================================================= */
-
-[data-testid="stCheckbox"] {
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   RADIO
-   ========================================================= */
-
-[data-testid="stRadio"] {
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   SLIDER
-   ========================================================= */
-
-[data-testid="stSlider"] {
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   TABELAS
+   DATAFRAMES E TABELAS
    ========================================================= */
 
 [data-testid="stDataFrame"] {
-    background-color: #FFFFFF !important;
-    color: #4A4540 !important;
-}
-
-[data-testid="stDataFrame"] * {
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   SCROLLBARS
-   ========================================================= */
-
-::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
-}
-
-::-webkit-scrollbar-track {
-    background: #E8E6E2;
-}
-
-::-webkit-scrollbar-thumb {
-    background: #B8B5B0;
-    border-radius: 8px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: #9E9A94;
-}
-
-
-/* =========================================================
-   TOOLTIPS
-   ========================================================= */
-
-[data-testid="stTooltipIcon"] {
-    color: #6E6761 !important;
-}
-
-
-/* =========================================================
-   CÓDIGO / ÁREAS ESCURAS
-   ========================================================= */
-
-pre,
-code,
-[data-testid="stCode"] {
-    background-color: #EDEBE7 !important;
-    color: #4A4540 !important;
-}
-
-
-/* =========================================================
-   SPINNER / LOADING
-   ========================================================= */
-
-[data-testid="stSpinner"] {
-    color: #6E6761 !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
 }
 
 
@@ -287,54 +172,122 @@ code,
    EXPANDERS
    ========================================================= */
 
-details,
-summary {
+[data-testid="stExpander"] {
     background-color: #FFFFFF !important;
+    border: 1px solid #C9C6C1 !important;
+    border-radius: 8px !important;
+}
+
+
+/* =========================================================
+   ABAS
+   ========================================================= */
+
+button[data-baseweb="tab"] {
+    color: #6E6761 !important;
+    font-weight: 600 !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    color: #5F554D !important;
+    border-bottom-color: #B89572 !important;
+}
+
+
+/* =========================================================
+   DIVISORES
+   ========================================================= */
+
+hr {
+    border-color: #D6D3CE !important;
+}
+
+
+/* =========================================================
+   ALERTAS
+   ========================================================= */
+
+[data-testid="stAlert"] {
+    border-radius: 8px !important;
+}
+
+
+/* =========================================================
+   HEADER DO STREAMLIT
+   ========================================================= */
+
+header[data-testid="stHeader"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    background: #F5F3EF !important;
+    z-index: 999999 !important;
+}
+
+
+/* =========================================================
+   CONTROLE PARA REABRIR SIDEBAR
+   ========================================================= */
+
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 9999999 !important;
+}
+
+
+/* =========================================================
+   ESCONDE BOTÕES EXTRAS DO STREAMLIT
+   ========================================================= */
+
+[data-testid="stToolbarActions"] {
+    display: none !important;
+}
+
+[data-testid="stAppDeployButton"] {
+    display: none !important;
+}
+
+#MainMenu {
+    display: none !important;
+}
+
+[data-testid="stStatusWidget"] {
+    display: none !important;
+}
+
+
+/* =========================================================
+   RADIO MENU LATERAL
+   ========================================================= */
+
+[data-testid="stSidebar"] [role="radiogroup"] label {
+    background-color: rgba(255,255,255,0.55) !important;
+    border-radius: 7px !important;
+    padding: 6px 8px !important;
+    margin-bottom: 3px !important;
     color: #4A4540 !important;
 }
 
-
-/* =========================================================
-   ÍCONES E SVG DO SISTEMA
-   ========================================================= */
-
-svg {
-    color: #6E6761 !important;
+[data-testid="stSidebar"] [role="radiogroup"] label:hover {
+    background-color: #BFC0C0 !important;
 }
 
 
 /* =========================================================
-   TEXTO GERAL
+   CAPTIONS E TEXTOS
    ========================================================= */
 
-div,
 p,
 span,
 label {
     color: #4A4540 !important;
 }
 
-
-/* =========================================================
-   LINKS
-   ========================================================= */
-
-a {
-    color: #8B6B52 !important;
-}
-
-
-/* =========================================================
-   MENU DO SIDEBAR
-   ========================================================= */
-
-[data-testid="stSidebar"] {
-    background-color: #D6D3CE !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
-
 # ============================================================
 # SESSION STATE
 # ============================================================
