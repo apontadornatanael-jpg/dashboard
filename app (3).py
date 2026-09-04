@@ -524,7 +524,13 @@ def migrar_sqlite_para_postgres(caminho_sqlite):
             rows = origem.execute(f"SELECT * FROM {tabela}").fetchall()
             if not rows:
                 continue
-            cols = rows[0].keys()
+            # Migra somente as colunas que existem no PostgreSQL. Isso permite
+            # importar backups SQLite de versões diferentes do aplicativo.
+            cur.execute("SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=%s", (tabela,))
+            cols_destino = {r[0] for r in cur.fetchall()}
+            cols = [c for c in rows[0].keys() if c in cols_destino]
+            if not cols:
+                continue
             placeholders = ",".join(["%s"] * len(cols))
             sql = f'INSERT INTO {tabela} ({",".join(cols)}) VALUES ({placeholders}) ON CONFLICT DO NOTHING'
             valores = [tuple(row[c] for c in cols) for row in rows]
@@ -598,9 +604,12 @@ def init_db():
         )""")
         cur.execute("""CREATE TABLE IF NOT EXISTS equipes(
             id BIGSERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, nome TEXT NOT NULL,
-            supervisor_id BIGINT, sondador_id BIGINT, auxiliar1_id BIGINT, auxiliar2_id BIGINT,
+            supervisor_id BIGINT, sondador_id BIGINT, auxiliar1_id BIGINT, auxiliar2_id BIGINT, auxiliar3_id BIGINT,
             status TEXT DEFAULT 'Ativa'
         )""")
+        # Compatibilidade com versões anteriores da tabela que ainda não possuíam auxiliar3_id.
+        cur.execute("ALTER TABLE equipes ADD COLUMN IF NOT EXISTS auxiliar3_id BIGINT")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS sondas(
             id BIGSERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, modelo TEXT, fabricante TEXT,
             patrimonio TEXT, equipe_id BIGINT, status TEXT DEFAULT 'Operando'
