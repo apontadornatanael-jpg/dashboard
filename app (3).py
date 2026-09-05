@@ -1146,38 +1146,17 @@ page = st.session_state.page
 if page == "🏠 Painel DDH":
     st.title("🏠 PAINEL DDH")
 
+    # ============================================================
+    # RESUMO EXECUTIVO DE PRODUÇÃO
+    # Produção geral + produção individual de cada equipe.
+    # ============================================================
     resumo = query("""
         SELECT
-            COALESCE(SUM(COALESCE(ate_m,0)-COALESCE(de_m,0)),0) metros,
-            COALESCE(SUM(COALESCE(recuperado_m,0)),0) recuperado
+            COALESCE(SUM(COALESCE(ate_m,0)-COALESCE(de_m,0)),0) metros
         FROM manobras
     """)
 
-    horas = query("""
-        SELECT COALESCE(SUM(
-            CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
-            THEN COALESCE(p.horas,0) ELSE 0 END
-        ),0) horas_operacao
-        FROM apontamentos p
-        LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
-    """)
-
     metros = float(resumo.iloc[0]["metros"] or 0)
-    recuperado = float(resumo.iloc[0]["recuperado"] or 0)
-    horas_total = float(horas.iloc[0]["horas_operacao"] or 0)
-    rec_total = recuperado / metros * 100 if metros else 0
-    rop = metros / horas_total if horas_total else 0
-    nboletins = int(query("SELECT COUNT(*) total FROM boletins").iloc[0]["total"])
-
-    cols = st.columns(5)
-    cols[0].metric("⛏️ PRODUÇÃO TOTAL", f"{metros:.2f} m")
-    cols[1].metric("🧪 RECUPERAÇÃO", f"{rec_total:.1f}%")
-    cols[2].metric("⏱️ HORAS OPERAÇÃO", f"{horas_total:.2f} h")
-    cols[3].metric("⚡ ROP MÉDIO", f"{rop:.2f} m/h")
-    cols[4].metric("📋 BOLETINS", nboletins)
-
-    st.divider()
-    st.subheader("👥 Produção por Equipe")
 
     equipes_df = query("""
         SELECT e.id equipe_id, e.codigo equipe, e.nome nome_equipe,
@@ -1195,16 +1174,55 @@ if page == "🏠 Painel DDH":
         ) m ON m.equipe_id=e.id
         LEFT JOIN (
             SELECT b.equipe_id,
-                   SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
-                       THEN COALESCE(p.horas,0) ELSE 0 END) horas_operacao
+                   SUM(CASE WHEN (
+                       TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA'
+                       OR p.codigo_atividade IN (14,15,16,17,18)
+                   )
+                   THEN COALESCE(p.horas,0) ELSE 0 END) horas_operacao
             FROM boletins b
             LEFT JOIN apontamentos p ON p.boletim_id=b.id
             LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
             GROUP BY b.equipe_id
         ) h ON h.equipe_id=e.id
         WHERE e.status!='Inativa'
-        ORDER BY metros DESC
+        ORDER BY e.codigo
     """)
+
+    # ------------------------------------------------------------
+    # TOPO: PRODUÇÃO TOTAL GERAL + PRODUÇÃO DE CADA EQUIPE
+    # ------------------------------------------------------------
+    st.subheader("📊 Resumo Executivo de Produção")
+
+    col_total = st.columns([1, 3, 1])
+    with col_total[1]:
+        st.metric("⛏️ PRODUÇÃO TOTAL GERAL", f"{metros:.2f} m")
+
+    st.caption("Produção acumulada de todas as equipes cadastradas.")
+
+    if not equipes_df.empty:
+        st.markdown("#### 👷 Produção por Equipe")
+
+        # Cria os cards automaticamente conforme o número de equipes.
+        for inicio in range(0, len(equipes_df), 4):
+            linha = equipes_df.iloc[inicio:inicio + 4]
+            cards_equipes = st.columns(4)
+
+            for pos, (_, equipe_row) in enumerate(linha.iterrows()):
+                codigo = str(equipe_row["equipe"])
+                nome = str(equipe_row["nome_equipe"] or "").strip()
+                metros_equipe = float(equipe_row["metros"] or 0)
+
+                rotulo = f"👷 {codigo}"
+                if nome:
+                    rotulo += f" — {nome}"
+
+                cards_equipes[pos].metric(
+                    rotulo,
+                    f"{metros_equipe:.2f} m"
+                )
+
+    st.divider()
+    st.subheader("👥 Produção por Equipe")
 
     if not equipes_df.empty:
         equipes_df["Recuperação %"] = (
