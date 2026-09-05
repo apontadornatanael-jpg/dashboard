@@ -1,5 +1,9 @@
 import streamlit as st
-import streamlit.components.v1 as components
+
+try:
+    from streamlit_autorefresh import st_autorefresh
+except ImportError:
+    st_autorefresh = None
 import sqlite3  # usado apenas pelo backup legado e pela migração inicial
 import psycopg2
 import json
@@ -1154,30 +1158,28 @@ if page == "🏠 Painel DDH":
     st.title("🏠 PAINEL DDH")
 
     # ============================================================
-    # ATUALIZAÇÃO AUTOMÁTICA DO PAINEL
+    # ATUALIZAÇÃO AUTOMÁTICA SEGURA DO PAINEL
     # ============================================================
-    # O Streamlit só consulta novamente o banco quando a página
-    # executa novamente. Este timer recarrega apenas o Painel DDH,
-    # permitindo que um celular aberto no painel receba os dados
-    # lançados em outro dispositivo sem precisar sair e voltar.
+    # Não usamos window.location.reload(), porque o reload completo
+    # pode recriar a sessão do Streamlit e devolver o usuário ao login.
+    # st_autorefresh faz apenas o rerun da aplicação e preserva
+    # st.session_state (usuário logado, permissões e página atual).
     AUTO_REFRESH_SECONDS = 15
 
-    components.html(
-        f"""
-        <script>
-            const tempo = {AUTO_REFRESH_SECONDS * 1000};
-            setTimeout(function() {{
-                window.parent.location.reload();
-            }}, tempo);
-        </script>
-        """,
-        height=0,
-        width=0,
-    )
-
-    st.caption(
-        f"🔄 Painel atualizado automaticamente a cada {AUTO_REFRESH_SECONDS} segundos."
-    )
+    if st_autorefresh is not None:
+        st_autorefresh(
+            interval=AUTO_REFRESH_SECONDS * 1000,
+            key="painel_ddh_auto_refresh"
+        )
+        st.caption(
+            f"🔄 Painel atualizado automaticamente a cada "
+            f"{AUTO_REFRESH_SECONDS} segundos."
+        )
+    else:
+        st.warning(
+            "Atualização automática não disponível porque falta o pacote "
+            "streamlit-autorefresh. Adicione-o ao requirements.txt."
+        )
 
     # ============================================================
     # RESUMO EXECUTIVO DE PRODUÇÃO
