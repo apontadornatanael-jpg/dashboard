@@ -2177,37 +2177,75 @@ elif page == "🔩 Sondas":
                 )
 
             if salvar_edicao_sonda:
-                if not editar_codigo.strip():
+                codigo_novo = editar_codigo.strip()
+
+                if not codigo_novo:
                     st.error("Informe o código da sonda.")
                 else:
-                    try:
-                        execute("""
-                            UPDATE sondas
-                            SET codigo=?,
-                                modelo=?,
-                                fabricante=?,
-                                patrimonio=?,
-                                equipe_id=?,
-                                status=?
-                            WHERE id=?
-                        """, (
-                            editar_codigo.strip(),
-                            editar_modelo.strip(),
-                            editar_fabricante.strip(),
-                            editar_patrimonio.strip(),
-                            int(editar_equipe),
-                            editar_status,
-                            int(sonda_id_editar)
-                        ))
-                        st.success(
-                            f"Sonda {editar_codigo.strip()} atualizada com sucesso."
-                        )
-                        st.rerun()
+                    # Verifica se existe OUTRA sonda usando o mesmo código.
+                    # O próprio registro que está sendo editado não entra na verificação.
+                    codigo_duplicado = query("""
+                        SELECT id
+                        FROM sondas
+                        WHERE codigo=? AND id<>?
+                        LIMIT 1
+                    """, (
+                        codigo_novo,
+                        int(sonda_id_editar)
+                    ))
 
-                    except sqlite3.IntegrityError:
+                    if not codigo_duplicado.empty:
                         st.error(
-                            "Já existe outra sonda cadastrada com este código."
+                            f"Não foi possível salvar: o código '{codigo_novo}' "
+                            "já pertence a outra sonda cadastrada."
                         )
+                    else:
+                        try:
+                            execute("""
+                                UPDATE sondas
+                                SET codigo=?,
+                                    modelo=?,
+                                    fabricante=?,
+                                    patrimonio=?,
+                                    equipe_id=?,
+                                    status=?
+                                WHERE id=?
+                            """, (
+                                codigo_novo,
+                                editar_modelo.strip(),
+                                editar_fabricante.strip(),
+                                editar_patrimonio.strip(),
+                                int(editar_equipe),
+                                editar_status,
+                                int(sonda_id_editar)
+                            ))
+
+                            st.success(
+                                f"Sonda {codigo_novo} atualizada com sucesso."
+                            )
+                            st.rerun()
+
+                        except Exception as e:
+                            # PostgreSQL não gera sqlite3.IntegrityError.
+                            # Mostra uma mensagem amigável e evita que o app
+                            # fique com erro vermelho na tela.
+                            erro = str(e)
+
+                            if (
+                                "UniqueViolation" in erro
+                                or "duplicate key" in erro.lower()
+                                or "unique constraint" in erro.lower()
+                            ):
+                                st.error(
+                                    "Não foi possível salvar porque existe "
+                                    "um valor duplicado em um campo único "
+                                    "(normalmente o código da sonda)."
+                                )
+                            else:
+                                st.error(
+                                    "Não foi possível atualizar a sonda. "
+                                    f"Detalhe: {erro}"
+                                )
 
             st.divider()
             st.subheader("🗑️ Excluir sonda")
