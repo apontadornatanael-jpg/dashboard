@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import sqlite3  # usado apenas pelo backup legado e pela migração inicial
 import psycopg2
 import json
@@ -1151,6 +1152,32 @@ page = st.session_state.page
 # ============================================================
 if page == "🏠 Painel DDH":
     st.title("🏠 PAINEL DDH")
+
+    # ============================================================
+    # ATUALIZAÇÃO AUTOMÁTICA DO PAINEL
+    # ============================================================
+    # O Streamlit só consulta novamente o banco quando a página
+    # executa novamente. Este timer recarrega apenas o Painel DDH,
+    # permitindo que um celular aberto no painel receba os dados
+    # lançados em outro dispositivo sem precisar sair e voltar.
+    AUTO_REFRESH_SECONDS = 15
+
+    components.html(
+        f"""
+        <script>
+            const tempo = {AUTO_REFRESH_SECONDS * 1000};
+            setTimeout(function() {{
+                window.parent.location.reload();
+            }}, tempo);
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+    st.caption(
+        f"🔄 Painel atualizado automaticamente a cada {AUTO_REFRESH_SECONDS} segundos."
+    )
 
     # ============================================================
     # RESUMO EXECUTIVO DE PRODUÇÃO
