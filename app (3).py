@@ -1162,7 +1162,8 @@ if page == "🏠 Painel DDH":
         SELECT e.id equipe_id, e.codigo equipe, e.nome nome_equipe,
                COALESCE(m.metros,0) metros,
                COALESCE(m.recuperado,0) recuperado,
-               COALESCE(h.horas_operacao,0) horas_operacao
+               COALESCE(h.horas_operacao,0) horas_operacao,
+               COALESCE(bt.boletins,0) boletins
         FROM equipes e
         LEFT JOIN (
             SELECT b.equipe_id,
@@ -1184,6 +1185,11 @@ if page == "🏠 Painel DDH":
             LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
             GROUP BY b.equipe_id
         ) h ON h.equipe_id=e.id
+        LEFT JOIN (
+            SELECT equipe_id, COUNT(*) AS boletins
+            FROM boletins
+            GROUP BY equipe_id
+        ) bt ON bt.equipe_id=e.id
         WHERE e.status!='Inativa'
         ORDER BY e.codigo
     """)
@@ -1193,54 +1199,108 @@ if page == "🏠 Painel DDH":
     # ------------------------------------------------------------
     st.subheader("📊 Resumo Executivo de Produção")
 
-    col_total = st.columns([1, 3, 1])
-    with col_total[1]:
-        st.metric("⛏️ PRODUÇÃO TOTAL GERAL", f"{metros:.2f} m")
+    # Card principal maior e centralizado para destacar a produção geral.
+    st.markdown("""
+    <style>
+    .ddh-total-card {
+        width: 100%;
+        max-width: 980px;
+        margin: 0.35rem auto 0.35rem auto;
+        padding: 1.1rem 1.5rem 1.25rem 1.5rem;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-sizing: border-box;
+        text-align: center;
+    }
+    .ddh-total-label {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--muted);
+        letter-spacing: 0.03em;
+        margin-bottom: 0.25rem;
+    }
+    .ddh-total-value {
+        font-size: clamp(2.3rem, 5vw, 4.2rem);
+        line-height: 1.05;
+        font-weight: 800;
+        color: var(--text);
+    }
+    @media (max-width: 700px) {
+        .ddh-total-card { padding: 1rem; border-radius: 14px; }
+        .ddh-total-label { font-size: 0.95rem; }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown(
+        f"""
+        <div class="ddh-total-card">
+            <div class="ddh-total-label">⛏️ PRODUÇÃO TOTAL GERAL</div>
+            <div class="ddh-total-value">{metros:.2f} m</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.caption("Produção acumulada de todas as equipes cadastradas.")
-
-    if not equipes_df.empty:
-        st.markdown("#### 👷 Produção por Equipe")
-
-        # Cria os cards automaticamente conforme o número de equipes.
-        for inicio in range(0, len(equipes_df), 4):
-            linha = equipes_df.iloc[inicio:inicio + 4]
-            cards_equipes = st.columns(4)
-
-            for pos, (_, equipe_row) in enumerate(linha.iterrows()):
-                codigo = str(equipe_row["equipe"])
-                nome = str(equipe_row["nome_equipe"] or "").strip()
-                metros_equipe = float(equipe_row["metros"] or 0)
-
-                rotulo = f"👷 {codigo}"
-                if nome:
-                    rotulo += f" — {nome}"
-
-                cards_equipes[pos].metric(
-                    rotulo,
-                    f"{metros_equipe:.2f} m"
-                )
-
-    st.divider()
-    st.subheader("👥 Produção por Equipe")
 
     if not equipes_df.empty:
         equipes_df["Recuperação %"] = (
             equipes_df["recuperado"] /
             equipes_df["metros"].replace(0, pd.NA) * 100
         ).fillna(0)
+
         equipes_df["ROP (m/h)"] = (
             equipes_df["metros"] /
             equipes_df["horas_operacao"].replace(0, pd.NA)
         ).fillna(0)
 
+        st.markdown("#### 👷 Produção por Equipe")
+
+        # Cria os painéis automaticamente conforme o número de equipes.
+        for inicio in range(0, len(equipes_df), 3):
+            linha = equipes_df.iloc[inicio:inicio + 3]
+            cards_equipes = st.columns(3)
+
+            for pos, (_, equipe_row) in enumerate(linha.iterrows()):
+                codigo = str(equipe_row["equipe"])
+                nome = str(equipe_row["nome_equipe"] or "").strip()
+
+                metros_equipe = float(equipe_row["metros"] or 0)
+                recuperacao = float(equipe_row["Recuperação %"] or 0)
+                horas_equipe = float(equipe_row["horas_operacao"] or 0)
+                rop_equipe = float(equipe_row["ROP (m/h)"] or 0)
+                boletins_equipe = int(equipe_row["boletins"] or 0)
+
+                with cards_equipes[pos]:
+                    with st.container(border=True):
+                        titulo = f"👷 {codigo}"
+                        if nome:
+                            titulo += f" — {nome}"
+                        st.markdown(f"**{titulo}**")
+
+                        st.metric("⛏️ PRODUÇÃO", f"{metros_equipe:.2f} m")
+
+                        c1, c2 = st.columns(2)
+                        c1.metric("🧪 RECUPERAÇÃO", f"{recuperacao:.1f}%")
+                        c2.metric("⏱️ HORAS OPERAÇÃO", f"{horas_equipe:.2f} h")
+
+                        c3, c4 = st.columns(2)
+                        c3.metric("⚡ ROP", f"{rop_equipe:.2f} m/h")
+                        c4.metric("📋 BOLETINS", boletins_equipe)
+
+    st.divider()
+    st.subheader("👥 Produção por Equipe")
+
+    if not equipes_df.empty:
         show = equipes_df[
             ["equipe","nome_equipe","metros","recuperado",
-             "Recuperação %","horas_operacao","ROP (m/h)"]
+             "Recuperação %","horas_operacao","ROP (m/h)","boletins"]
         ].copy()
         show.columns = [
             "Equipe","Nome","Metros","Recuperado",
-            "Recuperação %","Horas Operação","ROP (m/h)"
+            "Recuperação %","Horas Operação","ROP (m/h)","Boletins"
         ]
         st.dataframe(show.round(2), use_container_width=True, hide_index=True)
 
