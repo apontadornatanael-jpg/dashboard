@@ -2136,38 +2136,47 @@ elif page == "🔩 Sondas":
                 else 0
             )
 
-            with st.form("form_editar_sonda"):
+            # IMPORTANTE:
+            # O formulário precisa ter uma chave diferente para cada sonda.
+            # Caso contrário, o Streamlit pode manter os valores digitados da
+            # sonda anterior quando o usuário troca a sonda no seletor.
+            with st.form(f"form_editar_sonda_{int(sonda_id_editar)}"):
                 c1, c2, c3 = st.columns(3)
+
                 editar_codigo = c1.text_input(
                     "Código da sonda",
-                    value=str(sonda_edit["codigo"] or "")
+                    value=str(sonda_edit["codigo"] or ""),
+                    key=f"editar_codigo_{int(sonda_id_editar)}"
                 )
                 editar_modelo = c2.text_input(
                     "Modelo",
-                    value=str(sonda_edit["modelo"] or "")
+                    value=str(sonda_edit["modelo"] or ""),
+                    key=f"editar_modelo_{int(sonda_id_editar)}"
                 )
                 editar_fabricante = c3.text_input(
                     "Fabricante",
-                    value=str(sonda_edit["fabricante"] or "")
+                    value=str(sonda_edit["fabricante"] or ""),
+                    key=f"editar_fabricante_{int(sonda_id_editar)}"
                 )
 
                 c1, c2, c3 = st.columns(3)
                 editar_patrimonio = c1.text_input(
                     "Patrimônio",
-                    value=str(sonda_edit["patrimonio"] or "")
+                    value=str(sonda_edit["patrimonio"] or ""),
+                    key=f"editar_patrimonio_{int(sonda_id_editar)}"
                 )
                 editar_equipe = c2.selectbox(
                     "Equipe vinculada",
                     opts,
                     index=equipe_idx,
                     format_func=fmt_equipe,
-                    key="editar_sonda_equipe"
+                    key=f"editar_sonda_equipe_{int(sonda_id_editar)}"
                 )
                 editar_status = c3.selectbox(
                     "Status",
                     status_opcoes,
                     index=status_idx,
-                    key="editar_sonda_status"
+                    key=f"editar_sonda_status_{int(sonda_id_editar)}"
                 )
 
                 salvar_edicao_sonda = st.form_submit_button(
