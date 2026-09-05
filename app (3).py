@@ -272,6 +272,7 @@ DEFAULT_SESSION = {
     "usuario_nome": None,
     "usuario_login": None,
     "usuario_nivel": None,
+    "usuario_equipe_id": None,
     "page": "🏠 Painel DDH",
     "boletim_edit_id": None,
 }
@@ -1079,6 +1080,11 @@ def tela_login():
                     st.session_state.usuario_nome = str(u["nome"])
                     st.session_state.usuario_login = str(u["usuario"])
                     st.session_state.usuario_nivel = str(u["nivel"])
+                    st.session_state.usuario_equipe_id = (
+                        int(u["equipe_id"])
+                        if pd.notna(u["equipe_id"])
+                        else None
+                    )
 
                     if u["nivel"] == "Campo":
                         st.session_state.page = "📝 Novo Boletim"
@@ -1132,7 +1138,7 @@ with st.sidebar:
     st.divider()
 
     if st.button("🚪 Sair do Sistema", use_container_width=True):
-        for k in ["logado", "usuario_id", "usuario_nome", "usuario_login", "usuario_nivel"]:
+        for k in ["logado", "usuario_id", "usuario_nome", "usuario_login", "usuario_nivel", "usuario_equipe_id"]:
             st.session_state[k] = DEFAULT_SESSION[k]
         st.session_state.page = "🏠 Painel DDH"
         st.session_state.boletim_edit_id = None
@@ -1394,11 +1400,37 @@ elif page == "📝 Novo Boletim":
             )
 
             ids_e = list(map_e)
-            idx = ids_e.index(equipe_padrao) if equipe_padrao in ids_e else 0
-            equipe_id = d.selectbox(
-                "Equipe", ids_e, index=idx,
-                format_func=lambda x: map_e[x]
-            )
+
+            # Usuário de Campo deve lançar boletins somente para a equipe
+            # vinculada ao seu login. Isso evita que a primeira equipe da lista
+            # (ex.: EQP-DDH-01) apareça por padrão para todos.
+            equipe_usuario = st.session_state.get("usuario_equipe_id")
+
+            if nivel == "Campo" and equipe_usuario is not None:
+                if equipe_usuario not in ids_e:
+                    st.error(
+                        "A equipe vinculada ao seu usuário está inativa ou não existe. "
+                        "Peça ao administrador para verificar seu cadastro."
+                    )
+                    st.stop()
+
+                equipe_id = equipe_usuario
+                d.info(f"👷 Equipe vinculada ao seu login: {map_e[equipe_id]}")
+            else:
+                # Para administrador/supervisor, mantém a seleção normal.
+                # Primeiro tenta usar a equipe vinculada à sonda.
+                # Se não houver, usa a primeira equipe disponível.
+                equipe_preferida = equipe_padrao
+                idx = (
+                    ids_e.index(equipe_preferida)
+                    if equipe_preferida in ids_e
+                    else 0
+                )
+
+                equipe_id = d.selectbox(
+                    "Equipe", ids_e, index=idx,
+                    format_func=lambda x: map_e[x]
+                )
 
             a, b, c, d = st.columns(4)
             furo_id = a.selectbox(
@@ -2068,6 +2100,114 @@ elif page == "🔩 Sondas":
                 use_container_width=True,
                 hide_index=True
             )
+
+            st.divider()
+            st.subheader("✏️ Editar sonda")
+
+            sonda_id_editar = st.selectbox(
+                "Selecione a sonda que deseja editar",
+                df_sondas["id"].tolist(),
+                format_func=lambda x: (
+                    f"{df_sondas[df_sondas['id'] == x].iloc[0]['codigo']}"
+                    f" - {df_sondas[df_sondas['id'] == x].iloc[0]['modelo']}"
+                ),
+                key="sonda_editar_select"
+            )
+
+            sonda_edit = df_sondas[
+                df_sondas["id"] == sonda_id_editar
+            ].iloc[0]
+
+            # Define a equipe atualmente vinculada para abrir o selectbox
+            # já na opção correta.
+            equipe_atual_id = int(sonda_edit["equipe_id"])                 if pd.notna(sonda_edit["equipe_id"]) else opts[0]
+
+            equipe_idx = (
+                opts.index(equipe_atual_id)
+                if equipe_atual_id in opts
+                else 0
+            )
+
+            status_opcoes = ["Operando", "Parada", "Manutenção", "Inativa"]
+            status_atual = str(sonda_edit["status"] or "Operando")
+            status_idx = (
+                status_opcoes.index(status_atual)
+                if status_atual in status_opcoes
+                else 0
+            )
+
+            with st.form("form_editar_sonda"):
+                c1, c2, c3 = st.columns(3)
+                editar_codigo = c1.text_input(
+                    "Código da sonda",
+                    value=str(sonda_edit["codigo"] or "")
+                )
+                editar_modelo = c2.text_input(
+                    "Modelo",
+                    value=str(sonda_edit["modelo"] or "")
+                )
+                editar_fabricante = c3.text_input(
+                    "Fabricante",
+                    value=str(sonda_edit["fabricante"] or "")
+                )
+
+                c1, c2, c3 = st.columns(3)
+                editar_patrimonio = c1.text_input(
+                    "Patrimônio",
+                    value=str(sonda_edit["patrimonio"] or "")
+                )
+                editar_equipe = c2.selectbox(
+                    "Equipe vinculada",
+                    opts,
+                    index=equipe_idx,
+                    format_func=fmt_equipe,
+                    key="editar_sonda_equipe"
+                )
+                editar_status = c3.selectbox(
+                    "Status",
+                    status_opcoes,
+                    index=status_idx,
+                    key="editar_sonda_status"
+                )
+
+                salvar_edicao_sonda = st.form_submit_button(
+                    "💾 SALVAR ALTERAÇÕES",
+                    type="primary",
+                    use_container_width=True
+                )
+
+            if salvar_edicao_sonda:
+                if not editar_codigo.strip():
+                    st.error("Informe o código da sonda.")
+                else:
+                    try:
+                        execute("""
+                            UPDATE sondas
+                            SET codigo=?,
+                                modelo=?,
+                                fabricante=?,
+                                patrimonio=?,
+                                equipe_id=?,
+                                status=?
+                            WHERE id=?
+                        """, (
+                            editar_codigo.strip(),
+                            editar_modelo.strip(),
+                            editar_fabricante.strip(),
+                            editar_patrimonio.strip(),
+                            int(editar_equipe),
+                            editar_status,
+                            int(sonda_id_editar)
+                        ))
+                        st.success(
+                            f"Sonda {editar_codigo.strip()} atualizada com sucesso."
+                        )
+                        st.rerun()
+
+                    except sqlite3.IntegrityError:
+                        st.error(
+                            "Já existe outra sonda cadastrada com este código."
+                        )
 
             st.divider()
             st.subheader("🗑️ Excluir sonda")
