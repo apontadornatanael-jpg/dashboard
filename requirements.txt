@@ -6,3 +6,4 @@ google-auth
 google-auth-oauthlib
 openpyxl
 psycopg2-binary>=2.9.9
+streamlit-autorefresh
