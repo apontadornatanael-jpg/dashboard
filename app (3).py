@@ -26,8 +26,8 @@ BACKUP_DIR.mkdir(exist_ok=True)
 LOGO_PATH = BASE_DIR / "logo_ddh.png"
 
 st.set_page_config(
-    page_title="DDH Campo",
-    page_icon="⛏️",
+    page_title="DDH BOA FORTUNA INVESTIMENTOS",
+    page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else "⛏️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -674,7 +674,7 @@ def mostrar_logo(container, largura=True):
     else:
         container.markdown(
             "<div style='text-align:center;font-size:42px'>⛏️</div>"
-            "<div style='text-align:center;font-size:28px;font-weight:800'>DDH CAMPO</div>"
+            "<div style='text-align:center;font-size:28px;font-weight:800'>DDH BOA FORTUNA INVESTIMENTOS</div>"
             "<div style='text-align:center;letter-spacing:2px'>CONTROLE OPERACIONAL</div>",
             unsafe_allow_html=True
         )
