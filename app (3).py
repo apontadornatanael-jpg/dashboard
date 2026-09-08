@@ -25,8 +25,11 @@ BACKUP_DIR = BASE_DIR / "backups"
 BACKUP_DIR.mkdir(exist_ok=True)
 LOGO_PATH = BASE_DIR / "logo_ddh.png"
 
+# Identidade oficial do aplicativo
+APP_NAME = "DDH BOA FORTUNA INVESTIMENTOS"
+
 st.set_page_config(
-    page_title="DDH BOA FORTUNA INVESTIMENTOS",
+    page_title=APP_NAME,
     page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else "⛏️",
     layout="wide",
     initial_sidebar_state="expanded"
