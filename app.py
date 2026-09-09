@@ -119,6 +119,25 @@ header[data-testid="stHeader"] {
     border-radius: 8px !important;
 }
 
+/* ============================================================
+   SETA DO MENU — PRETA
+   Altera somente o ícone da seta do menu lateral.
+   ============================================================ */
+[data-testid="stSidebarCollapsedControl"] svg,
+[data-testid="collapsedControl"] svg,
+[data-testid="stSidebarCollapseButton"] svg {
+    color: #000000 !important;
+    fill: #000000 !important;
+    stroke: #000000 !important;
+}
+
+[data-testid="stSidebarCollapsedControl"] svg path,
+[data-testid="collapsedControl"] svg path,
+[data-testid="stSidebarCollapseButton"] svg path {
+    fill: #000000 !important;
+    stroke: #000000 !important;
+}
+
 /* Esconde extras */
 [data-testid="stToolbarActions"],
 [data-testid="stAppDeployButton"],
