@@ -435,19 +435,16 @@ def capturar_gps_furo():
     """Captura GPS em latitude/longitude usando alta precisão do navegador."""
     st.markdown("#### 📍 Localização do furo")
     st.caption(
-        "Este botão solicita a localização mais precisa disponível no dispositivo, "
-        "sem usar uma posição em cache. Para melhor resultado, fique alguns segundos "
+        "Este botão solicita a localização atual do dispositivo. Para melhor resultado, fique alguns segundos "
         "parado no ponto do furo e mantenha o GPS do tablet/celular ligado."
     )
 
-    if gps_high_accuracy is None:
-        st.error("Componente de GPS não encontrado no deploy.")
+    if streamlit_geolocation is None:
+        st.error("Componente de GPS não encontrado. Adicione streamlit-geolocation ao requirements.txt e faça novo deploy.")
         return
 
-    localizacao = gps_high_accuracy(
-        key="gps_furo_alta_precisao",
-        height=52,
-        default=None,
+    localizacao = streamlit_geolocation(
+        key="gps_furo_alta_precisao"
     )
     if not isinstance(localizacao, dict):
         return
