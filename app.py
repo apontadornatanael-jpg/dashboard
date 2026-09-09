@@ -48,8 +48,8 @@ st.markdown("""
     --primary: #A8794D;
     --primary-hover: #8D623C;
     --table-head: #E3CDB0;
-    --table-row: #F5EBDD;
-    --table-alt: #EDE0CF;
+    --table-row: #F1E3D2;
+    --table-alt: #E8D8C4;
 }
 
 /* Fundo geral */
@@ -228,6 +228,10 @@ header[data-testid="stHeader"] {
 [data-testid="stDataEditor"] [role="gridcell"] {
     background: var(--table-row) !important;
     border-color: var(--border) !important;
+}
+[data-testid="stDataFrame"] [role="gridcell"]:hover,
+[data-testid="stDataEditor"] [role="gridcell"]:hover {
+    background: var(--table-alt) !important;
 }
 
 /* Alertas */
