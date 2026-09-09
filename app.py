@@ -26,63 +26,11 @@ BACKUP_DIR.mkdir(exist_ok=True)
 LOGO_PATH = BASE_DIR / "logo_ddh.png"
 
 st.set_page_config(
-    page_title="DDH BOA FORTUNA INVESTIMENTOS",
-    page_icon=str(LOGO_PATH) if LOGO_PATH.exists() else "⛏️",
+    page_title="DDH Campo",
+    page_icon="⛏️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# ============================================================
-# IDENTIDADE PARA TELA DE INÍCIO (iPhone / iPad / Android)
-# ============================================================
-# O Streamlit usa o diretório static/ para servir arquivos públicos.
-# Mantemos uma cópia da logo ali para favicon/PWA.
-STATIC_DIR = BASE_DIR / "static"
-STATIC_DIR.mkdir(exist_ok=True)
-STATIC_LOGO = STATIC_DIR / "logo_ddh.png"
-try:
-    if LOGO_PATH.exists() and (not STATIC_LOGO.exists() or LOGO_PATH.stat().st_mtime > STATIC_LOGO.stat().st_mtime):
-        STATIC_LOGO.write_bytes(LOGO_PATH.read_bytes())
-except Exception:
-    pass
-
-# Injeta metadados na página principal para que o iOS use nome e logo
-# ao adicionar o sistema à Tela de Início.
-try:
-    import streamlit.components.v1 as components
-    components.html("""
-    <script>
-    (function() {
-      try {
-        const doc = window.parent.document;
-        const title = 'DDH BOA FORTUNA INVESTIMENTOS';
-        doc.title = title;
-        const addMeta = (name, content, property=false) => {
-          const attr = property ? 'property' : 'name';
-          let el = doc.head.querySelector(`meta[${attr}="${name}"]`);
-          if (!el) { el = doc.createElement('meta'); el.setAttribute(attr, name); doc.head.appendChild(el); }
-          el.setAttribute('content', content);
-        };
-        addMeta('apple-mobile-web-app-title', title);
-        addMeta('apple-mobile-web-app-capable', 'yes');
-        addMeta('mobile-web-app-capable', 'yes');
-        addMeta('theme-color', '#A8794D');
-        const addLink = (rel, href, sizes, type) => {
-          let el = doc.head.querySelector(`link[rel="${rel}"]`);
-          if (!el) { el = doc.createElement('link'); el.rel = rel; doc.head.appendChild(el); }
-          el.href = href;
-          if (sizes) el.sizes = sizes;
-          if (type) el.type = type;
-        };
-        addLink('apple-touch-icon', '/app/static/logo_ddh.png', '180x180', 'image/png');
-        addLink('icon', '/app/static/logo_ddh.png', '192x192', 'image/png');
-        addLink('manifest', '/app/static/manifest.json', null, 'application/manifest+json');
-      } catch (e) {}
-    })();
-    </script>
-    """, height=0)
-except Exception:
-    pass
 
 st.markdown("""
 <style>
@@ -99,9 +47,9 @@ st.markdown("""
     --muted: #796657;
     --primary: #A8794D;
     --primary-hover: #8D623C;
-    --table-head: #E7D4BC;
-    --table-row: #FFFDF8;
-    --table-alt: #F6EDE1;
+    --table-head: #E3CDB0;
+    --table-row: #F5EBDD;
+    --table-alt: #EDE0CF;
 }
 
 /* Fundo geral */
@@ -726,7 +674,7 @@ def mostrar_logo(container, largura=True):
     else:
         container.markdown(
             "<div style='text-align:center;font-size:42px'>⛏️</div>"
-            "<div style='text-align:center;font-size:28px;font-weight:800'>DDH BOA FORTUNA INVESTIMENTOS</div>"
+            "<div style='text-align:center;font-size:28px;font-weight:800'>DDH CAMPO</div>"
             "<div style='text-align:center;letter-spacing:2px'>CONTROLE OPERACIONAL</div>",
             unsafe_allow_html=True
         )
