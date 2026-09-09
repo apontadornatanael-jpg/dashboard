@@ -4,6 +4,17 @@ try:
     from streamlit_autorefresh import st_autorefresh
 except ImportError:
     st_autorefresh = None
+
+try:
+    from streamlit_geolocation import streamlit_geolocation
+except ImportError:
+    streamlit_geolocation = None
+
+try:
+    from pyproj import Transformer
+except ImportError:
+    Transformer = None
+
 import sqlite3  # usado apenas pelo backup legado e pela migração inicial
 import psycopg2
 import json
@@ -284,6 +295,12 @@ DEFAULT_SESSION = {
     "usuario_equipe_id": None,
     "page": "🏠 Painel DDH",
     "boletim_edit_id": None,
+    "gps_latitude": None,
+    "gps_longitude": None,
+    "gps_accuracy": None,
+    "gps_coord_e": None,
+    "gps_coord_n": None,
+    "gps_utm_zone": None,
 }
 for k, v in DEFAULT_SESSION.items():
     if k not in st.session_state:
@@ -418,6 +435,89 @@ def safe_name(df, col, idv):
         return ""
     row = df[df["id"] == int(idv)]
     return "" if row.empty else str(row.iloc[0][col])
+
+
+def gps_para_utm(latitude, longitude):
+    """Converte GPS WGS84 para Coordenadas E/N UTM automaticamente."""
+    if Transformer is None:
+        raise RuntimeError(
+            "A biblioteca pyproj não está instalada. "
+            "Adicione pyproj ao requirements.txt."
+        )
+
+    latitude = float(latitude)
+    longitude = float(longitude)
+    zona = int((longitude + 180) // 6) + 1
+    epsg = (32700 if latitude < 0 else 32600) + zona
+
+    transformer = Transformer.from_crs(
+        "EPSG:4326",
+        f"EPSG:{epsg}",
+        always_xy=True
+    )
+    east, north = transformer.transform(longitude, latitude)
+    return float(east), float(north), int(zona)
+
+
+def capturar_gps_furo():
+    """
+    Obtém a localização do tablet/celular através do navegador.
+    Depois converte latitude/longitude para E/N UTM e preenche
+    automaticamente os campos do cadastro.
+    """
+    if streamlit_geolocation is None:
+        st.warning(
+            "📍 Localização GPS indisponível. Adicione "
+            "`streamlit-geolocation` ao requirements.txt."
+        )
+        return
+
+    st.markdown("#### 📍 Localização do furo")
+    st.caption(
+        "Quando estiver no ponto do furo, toque no botão abaixo e "
+        "autorize a localização. As coordenadas E/N serão preenchidas automaticamente."
+    )
+
+    localizacao = streamlit_geolocation()
+
+    if not isinstance(localizacao, dict):
+        return
+
+    if "error" in localizacao:
+        erro = localizacao.get("error")
+        mensagem = erro.get("message", "Não foi possível obter a localização.") if isinstance(erro, dict) else str(erro)
+        st.warning(f"⚠️ GPS: {mensagem}")
+        return
+
+    lat = localizacao.get("latitude")
+    lon = localizacao.get("longitude")
+    if lat is None or lon is None:
+        return
+
+    try:
+        east, north, zona = gps_para_utm(lat, lon)
+
+        st.session_state.gps_latitude = float(lat)
+        st.session_state.gps_longitude = float(lon)
+        st.session_state.gps_accuracy = localizacao.get("accuracy")
+        st.session_state.gps_coord_e = round(east, 2)
+        st.session_state.gps_coord_n = round(north, 2)
+        st.session_state.gps_utm_zone = zona
+
+        # Atualiza diretamente os campos E/N exibidos no formulário.
+        st.session_state.furo_coord_e = round(east, 2)
+        st.session_state.furo_coord_n = round(north, 2)
+
+        precisao = localizacao.get("accuracy")
+        precisao_txt = f" | Precisão ±{float(precisao):.1f} m" if precisao is not None else ""
+
+        st.success(
+            f"📍 Coordenadas atualizadas automaticamente — "
+            f"E: {east:.2f} | N: {north:.2f} | UTM zona {zona}{precisao_txt}"
+        )
+    except Exception as exc:
+        st.error(f"Não foi possível converter a localização para UTM: {exc}")
+
 
 # ============================================================
 # BACKUP LÓGICO DO POSTGRESQL
@@ -2343,16 +2443,32 @@ elif page == "⚙️ Cadastros":
     with tab_f:
         st.subheader("🎯 Cadastro de Furo")
 
+        CLIENTE_PADRAO = "RIVAZ BRASIL"
+
+        capturar_gps_furo()
+
         with st.form("form_furo", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             ident = c1.text_input("Identificação do furo")
             projeto = c2.text_input("Projeto")
-            cliente = c3.text_input("Cliente")
+            cliente = c3.text_input(
+                "Cliente",
+                value=CLIENTE_PADRAO,
+                disabled=True
+            )
 
             c1, c2, c3 = st.columns(3)
             local = c1.text_input("Local")
-            e = c2.number_input("Coordenada E")
-            n = c3.number_input("Coordenada N")
+            e = c2.number_input(
+                "Coordenada E (UTM)",
+                value=float(st.session_state.gps_coord_e or 0.0),
+                key="furo_coord_e"
+            )
+            n = c3.number_input(
+                "Coordenada N (UTM)",
+                value=float(st.session_state.gps_coord_n or 0.0),
+                key="furo_coord_n"
+            )
 
             c1, c2, c3 = st.columns(3)
             cota = c1.number_input("Cota")
@@ -2374,10 +2490,17 @@ elif page == "⚙️ Cadastros":
                         )
                         VALUES(?,?,?,?,?,?,?,?,?,?)
                     """, (
-                        ident.strip(), projeto, cliente, local,
+                        ident.strip(), projeto, CLIENTE_PADRAO, local,
                         e, n, cota, az, dip, status
                     ))
                     st.success("Furo cadastrado com sucesso!")
+                    for _k in [
+                        "gps_latitude", "gps_longitude", "gps_accuracy",
+                        "gps_coord_e", "gps_coord_n", "gps_utm_zone"
+                    ]:
+                        st.session_state[_k] = None
+                    st.session_state.furo_coord_e = 0.0
+                    st.session_state.furo_coord_n = 0.0
                     st.rerun()
                 except sqlite3.IntegrityError:
                     st.error("Esta identificação de furo já está cadastrada.")
@@ -2481,16 +2604,32 @@ elif page == "🕳️ Cadastro de Furos":
     st.title("🕳️ CADASTRO DE FUROS")
     st.caption("Cadastre um novo furo para disponibilizá-lo no preenchimento dos boletins.")
 
+    CLIENTE_PADRAO = "RIVAZ BRASIL"
+
+    capturar_gps_furo()
+
     with st.form("form_furo_campo", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         ident = c1.text_input("Identificação do furo")
         projeto = c2.text_input("Projeto")
-        cliente = c3.text_input("Cliente")
+        cliente = c3.text_input(
+            "Cliente",
+            value=CLIENTE_PADRAO,
+            disabled=True
+        )
 
         c1, c2, c3 = st.columns(3)
         local = c1.text_input("Local")
-        e = c2.number_input("Coordenada E")
-        n = c3.number_input("Coordenada N")
+        e = c2.number_input(
+            "Coordenada E (UTM)",
+            value=float(st.session_state.gps_coord_e or 0.0),
+            key="furo_coord_e"
+        )
+        n = c3.number_input(
+            "Coordenada N (UTM)",
+            value=float(st.session_state.gps_coord_n or 0.0),
+            key="furo_coord_n"
+        )
 
         c1, c2, c3 = st.columns(3)
         cota = c1.number_input("Cota")
@@ -2512,10 +2651,17 @@ elif page == "🕳️ Cadastro de Furos":
                     )
                     VALUES(?,?,?,?,?,?,?,?,?,?)
                 """, (
-                    ident.strip(), projeto, cliente, local,
+                    ident.strip(), projeto, CLIENTE_PADRAO, local,
                     e, n, cota, az, dip, status
                 ))
                 st.success("Furo cadastrado com sucesso! Ele já pode ser selecionado no Novo Boletim.")
+                for _k in [
+                    "gps_latitude", "gps_longitude", "gps_accuracy",
+                    "gps_coord_e", "gps_coord_n", "gps_utm_zone"
+                ]:
+                    st.session_state[_k] = None
+                st.session_state.furo_coord_e = 0.0
+                st.session_state.furo_coord_n = 0.0
                 st.rerun()
             except sqlite3.IntegrityError:
                 st.error("Esta identificação de furo já está cadastrada.")
