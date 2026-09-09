@@ -10,10 +10,6 @@ try:
 except ImportError:
     streamlit_geolocation = None
 
-try:
-    from pyproj import Transformer
-except ImportError:
-    Transformer = None
 
 import sqlite3  # usado apenas pelo backup legado e pela migração inicial
 import psycopg2
@@ -298,9 +294,6 @@ DEFAULT_SESSION = {
     "gps_latitude": None,
     "gps_longitude": None,
     "gps_accuracy": None,
-    "gps_coord_e": None,
-    "gps_coord_n": None,
-    "gps_utm_zone": None,
 }
 for k, v in DEFAULT_SESSION.items():
     if k not in st.session_state:
@@ -437,34 +430,8 @@ def safe_name(df, col, idv):
     return "" if row.empty else str(row.iloc[0][col])
 
 
-def gps_para_utm(latitude, longitude):
-    """Converte GPS WGS84 para Coordenadas E/N UTM automaticamente."""
-    if Transformer is None:
-        raise RuntimeError(
-            "A biblioteca pyproj não está instalada. "
-            "Adicione pyproj ao requirements.txt."
-        )
-
-    latitude = float(latitude)
-    longitude = float(longitude)
-    zona = int((longitude + 180) // 6) + 1
-    epsg = (32700 if latitude < 0 else 32600) + zona
-
-    transformer = Transformer.from_crs(
-        "EPSG:4326",
-        f"EPSG:{epsg}",
-        always_xy=True
-    )
-    east, north = transformer.transform(longitude, latitude)
-    return float(east), float(north), int(zona)
-
-
 def capturar_gps_furo():
-    """
-    Obtém a localização do tablet/celular através do navegador.
-    Depois converte latitude/longitude para E/N UTM e preenche
-    automaticamente os campos do cadastro.
-    """
+    """Obtém e mantém a localização GPS em latitude/longitude WGS84."""
     if streamlit_geolocation is None:
         st.warning(
             "📍 Localização GPS indisponível. Adicione "
@@ -475,11 +442,10 @@ def capturar_gps_furo():
     st.markdown("#### 📍 Localização do furo")
     st.caption(
         "Quando estiver no ponto do furo, toque no botão abaixo e "
-        "autorize a localização. As coordenadas E/N serão preenchidas automaticamente."
+        "autorize a localização. Latitude e longitude serão preenchidas automaticamente."
     )
 
     localizacao = streamlit_geolocation()
-
     if not isinstance(localizacao, dict):
         return
 
@@ -495,28 +461,22 @@ def capturar_gps_furo():
         return
 
     try:
-        east, north, zona = gps_para_utm(lat, lon)
-
-        st.session_state.gps_latitude = float(lat)
-        st.session_state.gps_longitude = float(lon)
+        lat = float(lat)
+        lon = float(lon)
+        st.session_state.gps_latitude = lat
+        st.session_state.gps_longitude = lon
         st.session_state.gps_accuracy = localizacao.get("accuracy")
-        st.session_state.gps_coord_e = round(east, 2)
-        st.session_state.gps_coord_n = round(north, 2)
-        st.session_state.gps_utm_zone = zona
-
-        # Atualiza diretamente os campos E/N exibidos no formulário.
-        st.session_state.furo_coord_e = round(east, 2)
-        st.session_state.furo_coord_n = round(north, 2)
 
         precisao = localizacao.get("accuracy")
         precisao_txt = f" | Precisão ±{float(precisao):.1f} m" if precisao is not None else ""
-
         st.success(
-            f"📍 Coordenadas atualizadas automaticamente — "
-            f"E: {east:.2f} | N: {north:.2f} | UTM zona {zona}{precisao_txt}"
+            f"📍 GPS atualizado — Latitude: {lat:.7f} | Longitude: {lon:.7f}{precisao_txt}"
         )
+
+        maps_url = f"https://www.google.com/maps?q={lat:.7f},{lon:.7f}"
+        st.link_button("🌎 Conferir no Google Maps", maps_url)
     except Exception as exc:
-        st.error(f"Não foi possível converter a localização para UTM: {exc}")
+        st.error(f"Não foi possível obter a localização GPS: {exc}")
 
 
 # ============================================================
@@ -726,7 +686,7 @@ def init_db():
         )""")
         cur.execute("""CREATE TABLE IF NOT EXISTS furos(
             id BIGSERIAL PRIMARY KEY, identificacao TEXT UNIQUE NOT NULL, projeto TEXT, cliente TEXT,
-            local TEXT, coord_e DOUBLE PRECISION, coord_n DOUBLE PRECISION, cota DOUBLE PRECISION,
+            local TEXT, coord_e DOUBLE PRECISION, coord_n DOUBLE PRECISION, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, cota DOUBLE PRECISION,
             azimute DOUBLE PRECISION, dip DOUBLE PRECISION, status TEXT DEFAULT 'Em andamento'
         )""")
         cur.execute("""CREATE TABLE IF NOT EXISTS atividades(
@@ -2459,15 +2419,17 @@ elif page == "⚙️ Cadastros":
 
             c1, c2, c3 = st.columns(3)
             local = c1.text_input("Local")
-            e = c2.number_input(
-                "Coordenada E (UTM)",
-                value=float(st.session_state.gps_coord_e or 0.0),
-                key="furo_coord_e"
+            lat_furo = c2.number_input(
+                "Latitude",
+                value=float(st.session_state.gps_latitude or 0.0),
+                format="%.7f",
+                key="furo_latitude"
             )
-            n = c3.number_input(
-                "Coordenada N (UTM)",
-                value=float(st.session_state.gps_coord_n or 0.0),
-                key="furo_coord_n"
+            lon_furo = c3.number_input(
+                "Longitude",
+                value=float(st.session_state.gps_longitude or 0.0),
+                format="%.7f",
+                key="furo_longitude"
             )
 
             c1, c2, c3 = st.columns(3)
@@ -2486,9 +2448,9 @@ elif page == "⚙️ Cadastros":
                     execute("""
                         INSERT INTO furos(
                             identificacao,projeto,cliente,local,
-                            coord_e,coord_n,cota,azimute,dip,status
+                            coord_e,coord_n,latitude,longitude,cota,azimute,dip,status
                         )
-                        VALUES(?,?,?,?,?,?,?,?,?,?)
+                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                     """, (
                         ident.strip(), projeto, CLIENTE_PADRAO, local,
                         e, n, cota, az, dip, status
@@ -2496,7 +2458,7 @@ elif page == "⚙️ Cadastros":
                     st.success("Furo cadastrado com sucesso!")
                     for _k in [
                         "gps_latitude", "gps_longitude", "gps_accuracy",
-                        "gps_coord_e", "gps_coord_n", "gps_utm_zone"
+                        
                     ]:
                         st.session_state[_k] = None
                     # O formulário usa clear_on_submit=True, então os widgets
@@ -2659,7 +2621,7 @@ elif page == "🕳️ Cadastro de Furos":
                 st.success("Furo cadastrado com sucesso! Ele já pode ser selecionado no Novo Boletim.")
                 for _k in [
                     "gps_latitude", "gps_longitude", "gps_accuracy",
-                    "gps_coord_e", "gps_coord_n", "gps_utm_zone"
+                    
                 ]:
                     st.session_state[_k] = None
                 # O formulário usa clear_on_submit=True, então os widgets
