@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -431,52 +432,59 @@ def safe_name(df, col, idv):
 
 
 def capturar_gps_furo():
-    """Obtém e mantém a localização GPS em latitude/longitude WGS84."""
-    if streamlit_geolocation is None:
-        st.warning(
-            "📍 Localização GPS indisponível. Adicione "
-            "`streamlit-geolocation` ao requirements.txt."
-        )
-        return
-
+    """Captura GPS em latitude/longitude usando alta precisão do navegador."""
     st.markdown("#### 📍 Localização do furo")
     st.caption(
-        "Quando estiver no ponto do furo, toque no botão abaixo e "
-        "autorize a localização. Latitude e longitude serão preenchidas automaticamente."
+        "Este botão solicita a localização mais precisa disponível no dispositivo, "
+        "sem usar uma posição em cache. Para melhor resultado, fique alguns segundos "
+        "parado no ponto do furo e mantenha o GPS do tablet/celular ligado."
     )
 
-    localizacao = streamlit_geolocation()
+    if gps_high_accuracy is None:
+        st.error("Componente de GPS não encontrado no deploy.")
+        return
+
+    localizacao = gps_high_accuracy(
+        key="gps_furo_alta_precisao",
+        height=52,
+        default=None,
+    )
     if not isinstance(localizacao, dict):
         return
 
     if "error" in localizacao:
-        erro = localizacao.get("error")
+        erro = localizacao.get("error") or {}
         mensagem = erro.get("message", "Não foi possível obter a localização.") if isinstance(erro, dict) else str(erro)
         st.warning(f"⚠️ GPS: {mensagem}")
         return
 
     lat = localizacao.get("latitude")
     lon = localizacao.get("longitude")
+    accuracy = localizacao.get("accuracy")
     if lat is None or lon is None:
         return
 
-    try:
-        lat = float(lat)
-        lon = float(lon)
-        st.session_state.gps_latitude = lat
-        st.session_state.gps_longitude = lon
-        st.session_state.gps_accuracy = localizacao.get("accuracy")
+    lat = float(lat)
+    lon = float(lon)
+    accuracy = float(accuracy) if accuracy is not None else None
 
-        precisao = localizacao.get("accuracy")
-        precisao_txt = f" | Precisão ±{float(precisao):.1f} m" if precisao is not None else ""
+    st.session_state.gps_latitude = lat
+    st.session_state.gps_longitude = lon
+    st.session_state.gps_accuracy = accuracy
+
+    if accuracy is not None and accuracy > 30:
+        st.warning(
+            f"⚠️ Localização capturada, mas a precisão informada pelo dispositivo é "
+            f"aproximadamente ±{accuracy:.1f} m. Tente novamente parado no ponto do furo."
+        )
+    else:
+        precisao_txt = f" | Precisão ±{accuracy:.1f} m" if accuracy is not None else ""
         st.success(
             f"📍 GPS atualizado — Latitude: {lat:.7f} | Longitude: {lon:.7f}{precisao_txt}"
         )
 
-        maps_url = f"https://www.google.com/maps?q={lat:.7f},{lon:.7f}"
-        st.link_button("🌎 Conferir no Google Maps", maps_url)
-    except Exception as exc:
-        st.error(f"Não foi possível obter a localização GPS: {exc}")
+    maps_url = f"https://www.google.com/maps?q={lat:.7f},{lon:.7f}"
+    st.link_button("🌎 Conferir no Google Maps", maps_url)
 
 
 # ============================================================
@@ -686,9 +694,12 @@ def init_db():
         )""")
         cur.execute("""CREATE TABLE IF NOT EXISTS furos(
             id BIGSERIAL PRIMARY KEY, identificacao TEXT UNIQUE NOT NULL, projeto TEXT, cliente TEXT,
-            local TEXT, coord_e DOUBLE PRECISION, coord_n DOUBLE PRECISION, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, cota DOUBLE PRECISION,
-            azimute DOUBLE PRECISION, dip DOUBLE PRECISION, status TEXT DEFAULT 'Em andamento'
+            local TEXT, coord_e DOUBLE PRECISION, coord_n DOUBLE PRECISION, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION,
+            cota DOUBLE PRECISION, azimute DOUBLE PRECISION, dip DOUBLE PRECISION, status TEXT DEFAULT 'Em andamento'
         )""")
+        # Compatibilidade com bancos já existentes.
+        cur.execute("ALTER TABLE furos ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION")
+        cur.execute("ALTER TABLE furos ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION")
         cur.execute("""CREATE TABLE IF NOT EXISTS atividades(
             codigo INTEGER PRIMARY KEY, grupo TEXT NOT NULL, atividade TEXT NOT NULL,
             classificacao TEXT NOT NULL
@@ -1643,10 +1654,43 @@ elif page == "📝 Novo Boletim":
             ).fillna(0)
             st.dataframe(view.round(2), use_container_width=True, hide_index=True)
 
-            excluir_manobra = st.selectbox(
-                "Excluir manobra",
+            editar_manobra = st.selectbox(
+                "✏️ Selecione a manobra para corrigir",
                 view["id"].tolist(),
-                format_func=lambda x: f"Manobra #{int(view[view.id==x].iloc[0]['numero'])}"
+                format_func=lambda x: f"Manobra #{int(view[view.id==x].iloc[0]['numero'])}",
+                key=f"editar_manobra_select_{int(bid)}"
+            )
+            man_edit = dfm[dfm["id"] == editar_manobra].iloc[0]
+            with st.form(f"form_editar_manobra_{int(editar_manobra)}"):
+                ec1, ec2, ec3, ec4 = st.columns(4)
+                ed_num = ec1.number_input("Nº", min_value=1, value=int(man_edit["numero"]), step=1)
+                ed_de = ec2.number_input("De (m)", min_value=0.0, value=float(man_edit["de_m"] or 0.0), step=0.1)
+                ed_ate = ec3.number_input("Até (m)", min_value=0.0, value=float(man_edit["ate_m"] or 0.0), step=0.1)
+                ed_rec = ec4.number_input("Recuperado (m)", min_value=0.0, value=float(man_edit["recuperado_m"] or 0.0), step=0.01)
+                ec1, ec2, ec3, ec4, ec5 = st.columns(5)
+                ed_dip = ec1.number_input("DIP", value=float(man_edit["dip"] or 0.0), step=0.1)
+                ed_qaqc = ec2.text_input("QAQC", value=str(man_edit["qaqc"] or ""))
+                ed_perfil = ec3.text_input("Perfil / Diâmetro", value=str(man_edit["perfil"] or ""))
+                ed_coroa = ec4.text_input("Coroa / Série", value=str(man_edit["coroa"] or ""))
+                ed_revest = ec5.text_input("Revestimento", value=str(man_edit["revestimento"] or ""))
+                ed_fluido = st.text_input("Tipo de Fluido", value=str(man_edit["fluido"] or ""))
+                salvar_ed_manobra = st.form_submit_button("💾 SALVAR CORREÇÃO DA MANOBRA", type="primary")
+
+            if salvar_ed_manobra:
+                if ed_ate <= ed_de:
+                    st.error("O valor 'Até' deve ser maior que 'De'.")
+                elif ed_rec > (ed_ate - ed_de) + 0.000001:
+                    st.error("A recuperação não pode ser maior que o avanço.")
+                else:
+                    execute("""UPDATE manobras SET numero=?, de_m=?, ate_m=?, recuperado_m=?, dip=?, qaqc=?, perfil=?, coroa=?, revestimento=?, fluido=? WHERE id=?""", (int(ed_num), ed_de, ed_ate, ed_rec, ed_dip, ed_qaqc, ed_perfil, ed_coroa, ed_revest, ed_fluido, int(editar_manobra)))
+                    st.success("Manobra corrigida com sucesso.")
+                    st.rerun()
+
+            excluir_manobra = st.selectbox(
+                "🗑️ Selecione a manobra para excluir",
+                view["id"].tolist(),
+                format_func=lambda x: f"Manobra #{int(view[view.id==x].iloc[0]['numero'])}",
+                key=f"excluir_manobra_select_{int(bid)}"
             )
             if st.button("🗑️ Excluir Manobra"):
                 delete("manobras", excluir_manobra)
@@ -2411,63 +2455,36 @@ elif page == "⚙️ Cadastros":
             c1, c2, c3 = st.columns(3)
             ident = c1.text_input("Identificação do furo")
             projeto = c2.text_input("Projeto")
-            cliente = c3.text_input(
-                "Cliente",
-                value=CLIENTE_PADRAO,
-                disabled=True
-            )
+            cliente = c3.text_input("Cliente", value=CLIENTE_PADRAO, disabled=True)
 
             c1, c2, c3 = st.columns(3)
             local = c1.text_input("Local")
-            lat_furo = c2.number_input(
-                "Latitude",
-                value=float(st.session_state.gps_latitude or 0.0),
-                format="%.7f",
-                key="furo_latitude"
-            )
-            lon_furo = c3.number_input(
-                "Longitude",
-                value=float(st.session_state.gps_longitude or 0.0),
-                format="%.7f",
-                key="furo_longitude"
-            )
+            lat_furo = c2.number_input("Latitude", value=float(st.session_state.gps_latitude or 0.0), format="%.7f", key="furo_latitude")
+            lon_furo = c3.number_input("Longitude", value=float(st.session_state.gps_longitude or 0.0), format="%.7f", key="furo_longitude")
 
             c1, c2, c3 = st.columns(3)
             cota = c1.number_input("Cota")
             az = c2.number_input("Azimute")
             dip = c3.number_input("DIP")
-
-            status = st.selectbox(
-                "Status", ["Em andamento","Planejado","Concluído"]
-            )
+            status = st.selectbox("Status", ["Em andamento", "Planejado", "Concluído"])
             salvar = st.form_submit_button("💾 Cadastrar furo", type="primary")
 
         if salvar:
             if ident.strip():
                 try:
                     execute("""
-                        INSERT INTO furos(
-                            identificacao,projeto,cliente,local,
-                            coord_e,coord_n,latitude,longitude,cota,azimute,dip,status
-                        )
-                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-                    """, (
-                        ident.strip(), projeto, CLIENTE_PADRAO, local,
-                        e, n, cota, az, dip, status
-                    ))
+                        INSERT INTO furos(identificacao,projeto,cliente,local,latitude,longitude,cota,azimute,dip,status)
+                        VALUES(?,?,?,?,?,?,?,?,?,?)
+                    """, (ident.strip(), projeto, CLIENTE_PADRAO, local, lat_furo, lon_furo, cota, az, dip, status))
                     st.success("Furo cadastrado com sucesso!")
-                    for _k in [
-                        "gps_latitude", "gps_longitude", "gps_accuracy",
-                        
-                    ]:
+                    for _k in ["gps_latitude", "gps_longitude", "gps_accuracy"]:
                         st.session_state[_k] = None
-                    # O formulário usa clear_on_submit=True, então os widgets
-                    # de coordenadas serão resetados automaticamente no próximo ciclo.
-                    # Não altere diretamente furo_coord_e/furo_coord_n aqui,
-                    # pois essas chaves pertencem aos widgets number_input.
                     st.rerun()
-                except sqlite3.IntegrityError:
-                    st.error("Esta identificação de furo já está cadastrada.")
+                except Exception as exc:
+                    if "duplicate key" in str(exc).lower() or "unique" in str(exc).lower():
+                        st.error("Esta identificação de furo já está cadastrada.")
+                    else:
+                        st.error(f"Não foi possível cadastrar o furo: {exc}")
             else:
                 st.error("Informe a identificação do furo.")
 
@@ -2479,6 +2496,29 @@ elif page == "⚙️ Cadastros":
             st.info("Nenhum furo cadastrado.")
         else:
             st.dataframe(df_furos, use_container_width=True, hide_index=True)
+            st.divider()
+            st.subheader("✏️ Corrigir furo")
+            furo_id_editar = st.selectbox("Selecione o furo para corrigir", df_furos["id"].tolist(), format_func=lambda x: str(df_furos[df_furos["id"] == x].iloc[0]["identificacao"]), key="furo_editar_select")
+            furo_edit = df_furos[df_furos["id"] == furo_id_editar].iloc[0]
+            with st.form(f"form_editar_furo_{int(furo_id_editar)}"):
+                ec1, ec2, ec3 = st.columns(3)
+                ed_ident = ec1.text_input("Identificação", value=str(furo_edit["identificacao"] or ""))
+                ed_projeto = ec2.text_input("Projeto", value=str(furo_edit["projeto"] or ""))
+                ed_local = ec3.text_input("Local", value=str(furo_edit["local"] or ""))
+                ec1, ec2, ec3 = st.columns(3)
+                ed_lat = ec1.number_input("Latitude", value=float(furo_edit["latitude"] or 0.0), format="%.7f")
+                ed_lon = ec2.number_input("Longitude", value=float(furo_edit["longitude"] or 0.0), format="%.7f")
+                ed_status = ec3.selectbox("Status", ["Em andamento", "Planejado", "Concluído"], index=["Em andamento", "Planejado", "Concluído"].index(str(furo_edit["status"])) if str(furo_edit["status"]) in ["Em andamento", "Planejado", "Concluído"] else 0)
+                ec1, ec2, ec3 = st.columns(3)
+                ed_cota = ec1.number_input("Cota", value=float(furo_edit["cota"] or 0.0))
+                ed_az = ec2.number_input("Azimute", value=float(furo_edit["azimute"] or 0.0))
+                ed_dip = ec3.number_input("DIP", value=float(furo_edit["dip"] or 0.0))
+                salvar_ed_furo = st.form_submit_button("💾 SALVAR CORREÇÃO", type="primary")
+            if salvar_ed_furo:
+                execute("""UPDATE furos SET identificacao=?, projeto=?, local=?, latitude=?, longitude=?, cota=?, azimute=?, dip=?, status=? WHERE id=?""", (ed_ident.strip(), ed_projeto, ed_local, ed_lat, ed_lon, ed_cota, ed_az, ed_dip, ed_status, int(furo_id_editar)))
+                st.success("Furo corrigido com sucesso.")
+                st.rerun()
+
             st.divider()
             st.subheader("🗑️ Excluir Furo")
 
@@ -2566,71 +2606,39 @@ elif page == "⚙️ Cadastros":
 # ============================================================
 elif page == "🕳️ Cadastro de Furos":
     st.title("🕳️ CADASTRO DE FUROS")
-    st.caption("Cadastre um novo furo para disponibilizá-lo no preenchimento dos boletins.")
-
+    st.caption("Cadastre, corrija ou exclua um furo quando houver erro de cadastro.")
     CLIENTE_PADRAO = "RIVAZ BRASIL"
-
     capturar_gps_furo()
 
     with st.form("form_furo_campo", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         ident = c1.text_input("Identificação do furo")
         projeto = c2.text_input("Projeto")
-        cliente = c3.text_input(
-            "Cliente",
-            value=CLIENTE_PADRAO,
-            disabled=True
-        )
-
+        cliente = c3.text_input("Cliente", value=CLIENTE_PADRAO, disabled=True)
         c1, c2, c3 = st.columns(3)
         local = c1.text_input("Local")
-        e = c2.number_input(
-            "Coordenada E (UTM)",
-            value=float(st.session_state.gps_coord_e or 0.0),
-            key="furo_coord_e"
-        )
-        n = c3.number_input(
-            "Coordenada N (UTM)",
-            value=float(st.session_state.gps_coord_n or 0.0),
-            key="furo_coord_n"
-        )
-
+        lat_furo = c2.number_input("Latitude", value=float(st.session_state.gps_latitude or 0.0), format="%.7f", key="campo_furo_latitude")
+        lon_furo = c3.number_input("Longitude", value=float(st.session_state.gps_longitude or 0.0), format="%.7f", key="campo_furo_longitude")
         c1, c2, c3 = st.columns(3)
         cota = c1.number_input("Cota")
         az = c2.number_input("Azimute")
         dip = c3.number_input("DIP")
-
-        status = st.selectbox(
-            "Status", ["Em andamento", "Planejado", "Concluído"]
-        )
+        status = st.selectbox("Status", ["Em andamento", "Planejado", "Concluído"])
         salvar = st.form_submit_button("💾 Cadastrar furo", type="primary")
 
     if salvar:
         if ident.strip():
             try:
-                execute("""
-                    INSERT INTO furos(
-                        identificacao,projeto,cliente,local,
-                        coord_e,coord_n,cota,azimute,dip,status
-                    )
-                    VALUES(?,?,?,?,?,?,?,?,?,?)
-                """, (
-                    ident.strip(), projeto, CLIENTE_PADRAO, local,
-                    e, n, cota, az, dip, status
-                ))
+                execute("""INSERT INTO furos(identificacao,projeto,cliente,local,latitude,longitude,cota,azimute,dip,status) VALUES(?,?,?,?,?,?,?,?,?,?)""", (ident.strip(), projeto, CLIENTE_PADRAO, local, lat_furo, lon_furo, cota, az, dip, status))
                 st.success("Furo cadastrado com sucesso! Ele já pode ser selecionado no Novo Boletim.")
-                for _k in [
-                    "gps_latitude", "gps_longitude", "gps_accuracy",
-                    
-                ]:
+                for _k in ["gps_latitude", "gps_longitude", "gps_accuracy"]:
                     st.session_state[_k] = None
-                # O formulário usa clear_on_submit=True, então os widgets
-                # de coordenadas serão resetados automaticamente no próximo ciclo.
-                # Não altere diretamente furo_coord_e/furo_coord_n aqui,
-                # pois essas chaves pertencem aos widgets number_input.
                 st.rerun()
-            except sqlite3.IntegrityError:
-                st.error("Esta identificação de furo já está cadastrada.")
+            except Exception as exc:
+                if "duplicate key" in str(exc).lower() or "unique" in str(exc).lower():
+                    st.error("Esta identificação de furo já está cadastrada.")
+                else:
+                    st.error(f"Não foi possível cadastrar o furo: {exc}")
         else:
             st.error("Informe a identificação do furo.")
 
@@ -2641,6 +2649,47 @@ elif page == "🕳️ Cadastro de Furos":
         st.info("Nenhum furo cadastrado.")
     else:
         st.dataframe(df_furos, use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.subheader("✏️ Corrigir furo")
+        furo_id_editar = st.selectbox("Selecione o furo para corrigir", df_furos["id"].tolist(), format_func=lambda x: str(df_furos[df_furos["id"] == x].iloc[0]["identificacao"]), key="campo_furo_editar_select")
+        furo_edit = df_furos[df_furos["id"] == furo_id_editar].iloc[0]
+        with st.form(f"form_campo_editar_furo_{int(furo_id_editar)}"):
+            c1, c2, c3 = st.columns(3)
+            ed_ident = c1.text_input("Identificação", value=str(furo_edit["identificacao"] or ""))
+            ed_projeto = c2.text_input("Projeto", value=str(furo_edit["projeto"] or ""))
+            ed_local = c3.text_input("Local", value=str(furo_edit["local"] or ""))
+            c1, c2, c3 = st.columns(3)
+            ed_lat = c1.number_input("Latitude", value=float(furo_edit["latitude"] or 0.0), format="%.7f")
+            ed_lon = c2.number_input("Longitude", value=float(furo_edit["longitude"] or 0.0), format="%.7f")
+            ed_status = c3.selectbox("Status", ["Em andamento", "Planejado", "Concluído"], index=["Em andamento", "Planejado", "Concluído"].index(str(furo_edit["status"])) if str(furo_edit["status"]) in ["Em andamento", "Planejado", "Concluído"] else 0)
+            c1, c2, c3 = st.columns(3)
+            ed_cota = c1.number_input("Cota", value=float(furo_edit["cota"] or 0.0))
+            ed_az = c2.number_input("Azimute", value=float(furo_edit["azimute"] or 0.0))
+            ed_dip = c3.number_input("DIP", value=float(furo_edit["dip"] or 0.0))
+            salvar_ed_furo = st.form_submit_button("💾 SALVAR CORREÇÃO", type="primary")
+        if salvar_ed_furo:
+            try:
+                execute("""UPDATE furos SET identificacao=?, projeto=?, local=?, latitude=?, longitude=?, cota=?, azimute=?, dip=?, status=? WHERE id=?""", (ed_ident.strip(), ed_projeto, ed_local, ed_lat, ed_lon, ed_cota, ed_az, ed_dip, ed_status, int(furo_id_editar)))
+                st.success("Furo corrigido com sucesso.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Não foi possível corrigir o furo: {exc}")
+
+        st.divider()
+        st.subheader("🗑️ Excluir furo")
+        confirmar = st.checkbox(f"Confirmo que desejo excluir o furo {furo_edit['identificacao']}", key="campo_confirmar_exclusao_furo")
+        if st.button("🗑️ EXCLUIR FURO", use_container_width=True, key="campo_excluir_furo"):
+            if not confirmar:
+                st.error("Marque a confirmação antes de excluir.")
+            else:
+                total = int(query("SELECT COUNT(*) AS total FROM boletins WHERE furo_id=?", (int(furo_id_editar),)).iloc[0]["total"])
+                if total > 0:
+                    st.error(f"Não é possível excluir este furo porque existem {total} boletim(ns) vinculados. Corrija os dados em vez de apagar o furo.")
+                else:
+                    delete("furos", int(furo_id_editar))
+                    st.success("Furo excluído com sucesso.")
+                    st.rerun()
 
 # ============================================================
 # CONSULTA DE ATIVIDADES - PERFIL CAMPO
