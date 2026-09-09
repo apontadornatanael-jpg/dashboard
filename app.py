@@ -2485,7 +2485,7 @@ elif page == "⚙️ Cadastros":
 
         st.divider()
         st.subheader("📋 Furos cadastrados")
-        df_furos = query("SELECT * FROM furos ORDER BY identificacao")
+        df_furos = query("SELECT id, identificacao, projeto, cliente, local, latitude, longitude, cota, azimute, dip, status FROM furos ORDER BY identificacao")
 
         if df_furos.empty:
             st.info("Nenhum furo cadastrado.")
@@ -2639,7 +2639,7 @@ elif page == "🕳️ Cadastro de Furos":
 
     st.divider()
     st.subheader("📋 Furos cadastrados")
-    df_furos = query("SELECT * FROM furos ORDER BY identificacao")
+    df_furos = query("SELECT id, identificacao, projeto, cliente, local, latitude, longitude, cota, azimute, dip, status FROM furos ORDER BY identificacao")
     if df_furos.empty:
         st.info("Nenhum furo cadastrado.")
     else:
