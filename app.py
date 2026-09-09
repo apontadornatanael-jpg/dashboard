@@ -443,9 +443,7 @@ def capturar_gps_furo():
         st.error("Componente de GPS não encontrado. Adicione streamlit-geolocation ao requirements.txt e faça novo deploy.")
         return
 
-    localizacao = streamlit_geolocation(
-        key="gps_furo_alta_precisao"
-    )
+    localizacao = streamlit_geolocation()
     if not isinstance(localizacao, dict):
         return
 
