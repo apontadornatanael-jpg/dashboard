@@ -96,6 +96,82 @@ h1, h2, h3, h4, h5, h6, p, label,
     color: var(--text) !important;
 }
 
+/* ============================================================
+   CORREÇÃO MOBILE — EVITA SOBREPOSIÇÃO DA BARRA LATERAL
+   ============================================================ */
+@media (max-width: 768px) {
+    /* O menu lateral ocupa toda a tela no celular/tablet.
+       Assim o conteúdo da página nunca fica aparecendo ao lado
+       do menu quando ele estiver aberto. */
+    section[data-testid="stSidebar"],
+    [data-testid="stSidebar"] {
+        width: 100vw !important;
+        min-width: 100vw !important;
+        max-width: 100vw !important;
+    }
+
+    section[data-testid="stSidebar"] > div:first-child,
+    [data-testid="stSidebar"] > div:first-child {
+        width: 100vw !important;
+        min-width: 100vw !important;
+        max-width: 100vw !important;
+    }
+
+    /* Área principal sem largura mínima que possa escapar da tela. */
+    [data-testid="stAppViewContainer"],
+    [data-testid="stAppViewContainer"] > .main,
+    .main,
+    .block-container {
+        max-width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    .block-container {
+        padding-left: 0.85rem !important;
+        padding-right: 0.85rem !important;
+        padding-top: 1rem !important;
+        padding-bottom: 1.25rem !important;
+    }
+
+    /* Colunas do Streamlit podem ficar estreitas demais em telas
+       pequenas. Permite quebra natural dos conteúdos. */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+        gap: 0.75rem !important;
+    }
+
+    /* Campos, botões e formulários não ultrapassam a tela. */
+    [data-testid="stForm"],
+    [data-testid="stVerticalBlockBorderWrapper"],
+    .stButton,
+    .stDownloadButton,
+    [data-testid="stTextInput"],
+    [data-testid="stNumberInput"],
+    [data-testid="stSelectbox"],
+    [data-testid="stMultiSelect"],
+    [data-testid="stDateInput"],
+    [data-testid="stTimeInput"],
+    [data-testid="stTextArea"] {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Tabelas continuam dentro da largura disponível e usam
+       rolagem horizontal quando houver muitas colunas. */
+    [data-testid="stDataFrame"],
+    [data-testid="stDataEditor"] {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+    }
+
+    /* Títulos longos não empurram a interface para fora da tela. */
+    h1, h2, h3, h4, h5, h6 {
+        max-width: 100% !important;
+        overflow-wrap: anywhere !important;
+    }
+}
+
 /* Cabeçalho do Streamlit */
 header[data-testid="stHeader"] {
     display: block !important;
