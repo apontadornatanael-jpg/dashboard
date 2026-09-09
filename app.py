@@ -2499,8 +2499,10 @@ elif page == "⚙️ Cadastros":
                         "gps_coord_e", "gps_coord_n", "gps_utm_zone"
                     ]:
                         st.session_state[_k] = None
-                    st.session_state.furo_coord_e = 0.0
-                    st.session_state.furo_coord_n = 0.0
+                    # O formulário usa clear_on_submit=True, então os widgets
+                    # de coordenadas serão resetados automaticamente no próximo ciclo.
+                    # Não altere diretamente furo_coord_e/furo_coord_n aqui,
+                    # pois essas chaves pertencem aos widgets number_input.
                     st.rerun()
                 except sqlite3.IntegrityError:
                     st.error("Esta identificação de furo já está cadastrada.")
@@ -2660,8 +2662,10 @@ elif page == "🕳️ Cadastro de Furos":
                     "gps_coord_e", "gps_coord_n", "gps_utm_zone"
                 ]:
                     st.session_state[_k] = None
-                st.session_state.furo_coord_e = 0.0
-                st.session_state.furo_coord_n = 0.0
+                # O formulário usa clear_on_submit=True, então os widgets
+                # de coordenadas serão resetados automaticamente no próximo ciclo.
+                # Não altere diretamente furo_coord_e/furo_coord_n aqui,
+                # pois essas chaves pertencem aos widgets number_input.
                 st.rerun()
             except sqlite3.IntegrityError:
                 st.error("Esta identificação de furo já está cadastrada.")
