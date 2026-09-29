@@ -687,62 +687,326 @@ def seed_activities():
         c.close()
 
 def init_db():
+    """Inicializa e faz a migração segura do PostgreSQL do DDH CAMPO.
+
+    A versão anterior criava manobras/apontamentos com boletim_id BIGINT
+    diretamente. Se o PostgreSQL já possuía boletins.id como INTEGER de uma
+    versão antiga, a criação da FK falhava com psycopg2.errors.DatatypeMismatch.
+
+    Esta rotina:
+      1. cria as tabelas sem FKs inicialmente;
+      2. garante as colunas usadas pelo aplicativo;
+      3. remove temporariamente as FKs do conjunto de tabelas do sistema;
+      4. padroniza IDs e chaves estrangeiras em BIGINT;
+      5. recria as FKs de manobras/apontamentos;
+      6. preserva os dados existentes.
+    """
+    tabelas_sistema = {
+        "colaboradores", "equipes", "sondas", "furos", "atividades",
+        "boletins", "manobras", "apontamentos", "usuarios"
+    }
+
     c = conn()
     try:
         cur = c.cursor()
+
+        # ------------------------------------------------------------
+        # 1) Criação inicial SEM chaves estrangeiras.
+        #    Isso permite migrar bancos antigos sem DataTypeMismatch.
+        # ------------------------------------------------------------
         cur.execute("""CREATE TABLE IF NOT EXISTS colaboradores(
-            id BIGSERIAL PRIMARY KEY, nome TEXT NOT NULL, funcao TEXT, matricula TEXT,
+            id BIGSERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            funcao TEXT,
+            matricula TEXT,
             status TEXT DEFAULT 'Ativo'
         )""")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS equipes(
-            id BIGSERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, nome TEXT NOT NULL,
-            supervisor_id BIGINT, sondador_id BIGINT, auxiliar1_id BIGINT, auxiliar2_id BIGINT, auxiliar3_id BIGINT,
+            id BIGSERIAL PRIMARY KEY,
+            codigo TEXT UNIQUE NOT NULL,
+            nome TEXT NOT NULL,
+            supervisor_id BIGINT,
+            sondador_id BIGINT,
+            auxiliar1_id BIGINT,
+            auxiliar2_id BIGINT,
+            auxiliar3_id BIGINT,
             status TEXT DEFAULT 'Ativa'
         )""")
-        # Compatibilidade com versões anteriores da tabela que ainda não possuíam auxiliar3_id.
-        cur.execute("ALTER TABLE equipes ADD COLUMN IF NOT EXISTS auxiliar3_id BIGINT")
 
         cur.execute("""CREATE TABLE IF NOT EXISTS sondas(
-            id BIGSERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, modelo TEXT, fabricante TEXT,
-            patrimonio TEXT, equipe_id BIGINT, status TEXT DEFAULT 'Operando'
+            id BIGSERIAL PRIMARY KEY,
+            codigo TEXT UNIQUE NOT NULL,
+            modelo TEXT,
+            fabricante TEXT,
+            patrimonio TEXT,
+            equipe_id BIGINT,
+            status TEXT DEFAULT 'Operando'
         )""")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS furos(
-            id BIGSERIAL PRIMARY KEY, identificacao TEXT UNIQUE NOT NULL, projeto TEXT, cliente TEXT,
-            local TEXT, coord_e DOUBLE PRECISION, coord_n DOUBLE PRECISION, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION,
-            cota DOUBLE PRECISION, azimute DOUBLE PRECISION, dip DOUBLE PRECISION, status TEXT DEFAULT 'Em andamento'
+            id BIGSERIAL PRIMARY KEY,
+            identificacao TEXT UNIQUE NOT NULL,
+            projeto TEXT,
+            cliente TEXT,
+            local TEXT,
+            coord_e DOUBLE PRECISION,
+            coord_n DOUBLE PRECISION,
+            latitude DOUBLE PRECISION,
+            longitude DOUBLE PRECISION,
+            cota DOUBLE PRECISION,
+            azimute DOUBLE PRECISION,
+            dip DOUBLE PRECISION,
+            status TEXT DEFAULT 'Em andamento'
         )""")
-        # Compatibilidade com bancos já existentes.
-        cur.execute("ALTER TABLE furos ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION")
-        cur.execute("ALTER TABLE furos ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS atividades(
-            codigo INTEGER PRIMARY KEY, grupo TEXT NOT NULL, atividade TEXT NOT NULL,
+            codigo INTEGER PRIMARY KEY,
+            grupo TEXT NOT NULL,
+            atividade TEXT NOT NULL,
             classificacao TEXT NOT NULL
         )""")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS boletins(
-            id BIGSERIAL PRIMARY KEY, data TEXT NOT NULL, turno TEXT, projeto TEXT, cliente TEXT,
-            sonda_id BIGINT, equipe_id BIGINT, furo_id BIGINT, horimetro_inicial DOUBLE PRECISION,
-            horimetro_final DOUBLE PRECISION, observacoes TEXT, criado_em TEXT
+            id BIGSERIAL PRIMARY KEY,
+            data TEXT NOT NULL,
+            turno TEXT,
+            projeto TEXT,
+            cliente TEXT,
+            sonda_id BIGINT,
+            equipe_id BIGINT,
+            furo_id BIGINT,
+            horimetro_inicial DOUBLE PRECISION,
+            horimetro_final DOUBLE PRECISION,
+            observacoes TEXT,
+            criado_em TEXT
         )""")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS manobras(
-            id BIGSERIAL PRIMARY KEY, boletim_id BIGINT NOT NULL REFERENCES boletins(id) ON DELETE CASCADE,
-            numero INTEGER, de_m DOUBLE PRECISION, ate_m DOUBLE PRECISION, recuperado_m DOUBLE PRECISION,
-            dip DOUBLE PRECISION, qaqc TEXT, perfil TEXT, coroa TEXT, revestimento TEXT, fluido TEXT
+            id BIGSERIAL PRIMARY KEY,
+            boletim_id BIGINT NOT NULL,
+            numero INTEGER,
+            de_m DOUBLE PRECISION,
+            ate_m DOUBLE PRECISION,
+            recuperado_m DOUBLE PRECISION,
+            dip DOUBLE PRECISION,
+            qaqc TEXT,
+            perfil TEXT,
+            coroa TEXT,
+            revestimento TEXT,
+            fluido TEXT
         )""")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS apontamentos(
-            id BIGSERIAL PRIMARY KEY, boletim_id BIGINT NOT NULL REFERENCES boletins(id) ON DELETE CASCADE,
-            codigo_atividade INTEGER, hora_inicio TEXT, hora_fim TEXT, horas DOUBLE PRECISION,
-            horimetro DOUBLE PRECISION, observacao TEXT
+            id BIGSERIAL PRIMARY KEY,
+            boletim_id BIGINT NOT NULL,
+            codigo_atividade INTEGER,
+            hora_inicio TEXT,
+            hora_fim TEXT,
+            horas DOUBLE PRECISION,
+            horimetro DOUBLE PRECISION,
+            observacao TEXT
         )""")
+
         cur.execute("""CREATE TABLE IF NOT EXISTS usuarios(
-            id BIGSERIAL PRIMARY KEY, nome TEXT NOT NULL, usuario TEXT UNIQUE NOT NULL,
-            senha TEXT NOT NULL, nivel TEXT NOT NULL, equipe_id BIGINT,
-            status TEXT DEFAULT 'Ativo', criado_em TEXT
+            id BIGSERIAL PRIMARY KEY,
+            nome TEXT NOT NULL,
+            usuario TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL,
+            nivel TEXT NOT NULL,
+            equipe_id BIGINT,
+            status TEXT DEFAULT 'Ativo',
+            criado_em TEXT
         )""")
+
+        # ------------------------------------------------------------
+        # 2) Compatibilidade com versões anteriores.
+        #    ADD COLUMN IF NOT EXISTS não altera dados existentes.
+        # ------------------------------------------------------------
+        colunas = {
+            "equipes": [
+                ("supervisor_id", "BIGINT"),
+                ("sondador_id", "BIGINT"),
+                ("auxiliar1_id", "BIGINT"),
+                ("auxiliar2_id", "BIGINT"),
+                ("auxiliar3_id", "BIGINT"),
+                ("status", "TEXT DEFAULT 'Ativa'")
+            ],
+            "sondas": [
+                ("modelo", "TEXT"),
+                ("fabricante", "TEXT"),
+                ("patrimonio", "TEXT"),
+                ("equipe_id", "BIGINT"),
+                ("status", "TEXT DEFAULT 'Operando'")
+            ],
+            "furos": [
+                ("projeto", "TEXT"),
+                ("cliente", "TEXT"),
+                ("local", "TEXT"),
+                ("coord_e", "DOUBLE PRECISION"),
+                ("coord_n", "DOUBLE PRECISION"),
+                ("latitude", "DOUBLE PRECISION"),
+                ("longitude", "DOUBLE PRECISION"),
+                ("cota", "DOUBLE PRECISION"),
+                ("azimute", "DOUBLE PRECISION"),
+                ("dip", "DOUBLE PRECISION"),
+                ("status", "TEXT DEFAULT 'Em andamento'")
+            ],
+            "boletins": [
+                ("data", "TEXT"),
+                ("turno", "TEXT"),
+                ("projeto", "TEXT"),
+                ("cliente", "TEXT"),
+                ("sonda_id", "BIGINT"),
+                ("equipe_id", "BIGINT"),
+                ("furo_id", "BIGINT"),
+                ("horimetro_inicial", "DOUBLE PRECISION"),
+                ("horimetro_final", "DOUBLE PRECISION"),
+                ("observacoes", "TEXT"),
+                ("criado_em", "TEXT")
+            ],
+            "manobras": [
+                ("boletim_id", "BIGINT"),
+                ("numero", "INTEGER"),
+                ("de_m", "DOUBLE PRECISION"),
+                ("ate_m", "DOUBLE PRECISION"),
+                ("recuperado_m", "DOUBLE PRECISION"),
+                ("dip", "DOUBLE PRECISION"),
+                ("qaqc", "TEXT"),
+                ("perfil", "TEXT"),
+                ("coroa", "TEXT"),
+                ("revestimento", "TEXT"),
+                ("fluido", "TEXT")
+            ],
+            "apontamentos": [
+                ("boletim_id", "BIGINT"),
+                ("codigo_atividade", "INTEGER"),
+                ("hora_inicio", "TEXT"),
+                ("hora_fim", "TEXT"),
+                ("horas", "DOUBLE PRECISION"),
+                ("horimetro", "DOUBLE PRECISION"),
+                ("observacao", "TEXT")
+            ],
+            "usuarios": [
+                ("nome", "TEXT"),
+                ("usuario", "TEXT"),
+                ("senha", "TEXT"),
+                ("nivel", "TEXT"),
+                ("equipe_id", "BIGINT"),
+                ("status", "TEXT DEFAULT 'Ativo'"),
+                ("criado_em", "TEXT")
+            ]
+        }
+
+        for tabela, itens in colunas.items():
+            for coluna, tipo in itens:
+                cur.execute(
+                    f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}"
+                )
+
+        # ------------------------------------------------------------
+        # 3) Remove temporariamente FKs que envolvam as tabelas do DDH.
+        #    Sem isso, PostgreSQL pode impedir a alteração INTEGER -> BIGINT.
+        # ------------------------------------------------------------
+        cur.execute("""
+            SELECT DISTINCT
+                   tc.table_schema,
+                   tc.table_name,
+                   tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.constraint_column_usage ccu
+              ON ccu.constraint_schema = tc.constraint_schema
+             AND ccu.constraint_name = tc.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+              AND (
+                    tc.table_name = ANY(%s)
+                    OR ccu.table_name = ANY(%s)
+                  )
+        """, (list(tabelas_sistema), list(tabelas_sistema)))
+
+        fks = cur.fetchall()
+        for schema, tabela, constraint in fks:
+            cur.execute(
+                f'ALTER TABLE "{schema}"."{tabela}" DROP CONSTRAINT IF EXISTS "{constraint}"'
+            )
+
+        # ------------------------------------------------------------
+        # 4) Padroniza TODOS os IDs principais e FKs como BIGINT.
+        #    O problema atual é justamente uma diferença INTEGER/BIGINT.
+        # ------------------------------------------------------------
+        ids_principais = [
+            "colaboradores", "equipes", "sondas", "furos",
+            "boletins", "manobras", "apontamentos", "usuarios"
+        ]
+
+        for tabela in ids_principais:
+            cur.execute(
+                f"ALTER TABLE {tabela} ALTER COLUMN id TYPE BIGINT USING id::bigint"
+            )
+
+        fks_bigint = [
+            ("equipes", "supervisor_id"),
+            ("equipes", "sondador_id"),
+            ("equipes", "auxiliar1_id"),
+            ("equipes", "auxiliar2_id"),
+            ("equipes", "auxiliar3_id"),
+            ("sondas", "equipe_id"),
+            ("boletins", "sonda_id"),
+            ("boletins", "equipe_id"),
+            ("boletins", "furo_id"),
+            ("manobras", "boletim_id"),
+            ("apontamentos", "boletim_id"),
+            ("usuarios", "equipe_id")
+        ]
+
+        for tabela, coluna in fks_bigint:
+            cur.execute(
+                f"ALTER TABLE {tabela} ALTER COLUMN {coluna} TYPE BIGINT USING {coluna}::bigint"
+            )
+
+        # ------------------------------------------------------------
+        # 5) Garante que as sequências associadas aos IDs possam crescer
+        #    como BIGINT. Isso é importante se o banco veio de SERIAL antigo.
+        # ------------------------------------------------------------
+        for tabela in ids_principais:
+            cur.execute("SELECT pg_get_serial_sequence(%s, 'id')", (tabela,))
+            row = cur.fetchone()
+            seq = row[0] if row else None
+            if seq:
+                cur.execute(f"ALTER SEQUENCE {seq} AS BIGINT")
+
+        # ------------------------------------------------------------
+        # 6) Recria as FKs essenciais.
+        #    NOT VALID permite recuperar um banco antigo mesmo se existirem
+        #    registros históricos órfãos; novos registros continuam protegidos.
+        # ------------------------------------------------------------
+        cur.execute("""
+            ALTER TABLE manobras
+            ADD CONSTRAINT fk_manobras_boletim
+            FOREIGN KEY (boletim_id) REFERENCES boletins(id)
+            ON DELETE CASCADE
+            NOT VALID
+        """)
+
+        cur.execute("""
+            ALTER TABLE apontamentos
+            ADD CONSTRAINT fk_apontamentos_boletim
+            FOREIGN KEY (boletim_id) REFERENCES boletins(id)
+            ON DELETE CASCADE
+            NOT VALID
+        """)
+
         c.commit()
+
+    except Exception:
+        c.rollback()
+        raise
     finally:
         c.close()
 
+    # Dados-base e usuário inicial.
     seed_activities()
+
     if query("SELECT COUNT(*) AS total FROM usuarios WHERE usuario='admin'").iloc[0]["total"] == 0:
         execute("""
             INSERT INTO usuarios(nome,usuario,senha,nivel,status,criado_em)
@@ -751,6 +1015,7 @@ def init_db():
             "Administrador", "admin", hash_senha("admin123"),
             "Administrador", "Ativo", datetime.now().isoformat()
         ))
+
 
 init_db()
 
