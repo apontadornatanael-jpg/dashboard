@@ -687,311 +687,62 @@ def seed_activities():
         c.close()
 
 def init_db():
-    """Inicializa o PostgreSQL sem alterar IDs existentes de forma forçada.
-
-    Compatibilidade importante:
-    - bancos antigos podem ter SERIAL/INTEGER;
-    - versões novas podem ter BIGSERIAL/BIGINT;
-    - o PostgreSQL não aceita FK entre tipos diferentes.
-
-    Portanto, esta rotina NÃO executa mais `id::bigint` sobre IDs existentes.
-    Ela mantém o tipo do ID pai e ajusta somente as colunas FK quando a
-    conversão é segura. Assim evitamos o CannotCoerce que estava derrubando
-    o aplicativo.
-    """
-    tabelas_sistema = {
-        "colaboradores", "equipes", "sondas", "furos", "atividades",
-        "boletins", "manobras", "apontamentos", "usuarios"
-    }
-
     c = conn()
     try:
         cur = c.cursor()
-
-        # ------------------------------------------------------------
-        # 1) Criação das tabelas SEM FKs.
-        # ------------------------------------------------------------
         cur.execute("""CREATE TABLE IF NOT EXISTS colaboradores(
-            id BIGSERIAL PRIMARY KEY,
-            nome TEXT NOT NULL,
-            funcao TEXT,
-            matricula TEXT,
+            id BIGSERIAL PRIMARY KEY, nome TEXT NOT NULL, funcao TEXT, matricula TEXT,
             status TEXT DEFAULT 'Ativo'
         )""")
-
         cur.execute("""CREATE TABLE IF NOT EXISTS equipes(
-            id BIGSERIAL PRIMARY KEY,
-            codigo TEXT UNIQUE NOT NULL,
-            nome TEXT NOT NULL,
-            supervisor_id BIGINT,
-            sondador_id BIGINT,
-            auxiliar1_id BIGINT,
-            auxiliar2_id BIGINT,
-            auxiliar3_id BIGINT,
+            id BIGSERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, nome TEXT NOT NULL,
+            supervisor_id BIGINT, sondador_id BIGINT, auxiliar1_id BIGINT, auxiliar2_id BIGINT, auxiliar3_id BIGINT,
             status TEXT DEFAULT 'Ativa'
         )""")
+        # Compatibilidade com versões anteriores da tabela que ainda não possuíam auxiliar3_id.
+        cur.execute("ALTER TABLE equipes ADD COLUMN IF NOT EXISTS auxiliar3_id BIGINT")
 
         cur.execute("""CREATE TABLE IF NOT EXISTS sondas(
-            id BIGSERIAL PRIMARY KEY,
-            codigo TEXT UNIQUE NOT NULL,
-            modelo TEXT,
-            fabricante TEXT,
-            patrimonio TEXT,
-            equipe_id BIGINT,
-            status TEXT DEFAULT 'Operando'
+            id BIGSERIAL PRIMARY KEY, codigo TEXT UNIQUE NOT NULL, modelo TEXT, fabricante TEXT,
+            patrimonio TEXT, equipe_id BIGINT, status TEXT DEFAULT 'Operando'
         )""")
-
         cur.execute("""CREATE TABLE IF NOT EXISTS furos(
-            id BIGSERIAL PRIMARY KEY,
-            identificacao TEXT UNIQUE NOT NULL,
-            projeto TEXT,
-            cliente TEXT,
-            local TEXT,
-            coord_e DOUBLE PRECISION,
-            coord_n DOUBLE PRECISION,
-            latitude DOUBLE PRECISION,
-            longitude DOUBLE PRECISION,
-            cota DOUBLE PRECISION,
-            azimute DOUBLE PRECISION,
-            dip DOUBLE PRECISION,
-            status TEXT DEFAULT 'Em andamento'
+            id BIGSERIAL PRIMARY KEY, identificacao TEXT UNIQUE NOT NULL, projeto TEXT, cliente TEXT,
+            local TEXT, coord_e DOUBLE PRECISION, coord_n DOUBLE PRECISION, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION,
+            cota DOUBLE PRECISION, azimute DOUBLE PRECISION, dip DOUBLE PRECISION, status TEXT DEFAULT 'Em andamento'
         )""")
-
+        # Compatibilidade com bancos já existentes.
+        cur.execute("ALTER TABLE furos ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION")
+        cur.execute("ALTER TABLE furos ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION")
         cur.execute("""CREATE TABLE IF NOT EXISTS atividades(
-            codigo INTEGER PRIMARY KEY,
-            grupo TEXT NOT NULL,
-            atividade TEXT NOT NULL,
+            codigo INTEGER PRIMARY KEY, grupo TEXT NOT NULL, atividade TEXT NOT NULL,
             classificacao TEXT NOT NULL
         )""")
-
         cur.execute("""CREATE TABLE IF NOT EXISTS boletins(
-            id BIGSERIAL PRIMARY KEY,
-            data TEXT NOT NULL,
-            turno TEXT,
-            projeto TEXT,
-            cliente TEXT,
-            sonda_id BIGINT,
-            equipe_id BIGINT,
-            furo_id BIGINT,
-            horimetro_inicial DOUBLE PRECISION,
-            horimetro_final DOUBLE PRECISION,
-            observacoes TEXT,
-            criado_em TEXT
+            id BIGSERIAL PRIMARY KEY, data TEXT NOT NULL, turno TEXT, projeto TEXT, cliente TEXT,
+            sonda_id BIGINT, equipe_id BIGINT, furo_id BIGINT, horimetro_inicial DOUBLE PRECISION,
+            horimetro_final DOUBLE PRECISION, observacoes TEXT, criado_em TEXT
         )""")
-
         cur.execute("""CREATE TABLE IF NOT EXISTS manobras(
-            id BIGSERIAL PRIMARY KEY,
-            boletim_id BIGINT NOT NULL,
-            numero INTEGER,
-            de_m DOUBLE PRECISION,
-            ate_m DOUBLE PRECISION,
-            recuperado_m DOUBLE PRECISION,
-            dip DOUBLE PRECISION,
-            qaqc TEXT,
-            perfil TEXT,
-            coroa TEXT,
-            revestimento TEXT,
-            fluido TEXT
+            id BIGSERIAL PRIMARY KEY, boletim_id BIGINT NOT NULL REFERENCES boletins(id) ON DELETE CASCADE,
+            numero INTEGER, de_m DOUBLE PRECISION, ate_m DOUBLE PRECISION, recuperado_m DOUBLE PRECISION,
+            dip DOUBLE PRECISION, qaqc TEXT, perfil TEXT, coroa TEXT, revestimento TEXT, fluido TEXT
         )""")
-
         cur.execute("""CREATE TABLE IF NOT EXISTS apontamentos(
-            id BIGSERIAL PRIMARY KEY,
-            boletim_id BIGINT NOT NULL,
-            codigo_atividade INTEGER,
-            hora_inicio TEXT,
-            hora_fim TEXT,
-            horas DOUBLE PRECISION,
-            horimetro DOUBLE PRECISION,
-            observacao TEXT
+            id BIGSERIAL PRIMARY KEY, boletim_id BIGINT NOT NULL REFERENCES boletins(id) ON DELETE CASCADE,
+            codigo_atividade INTEGER, hora_inicio TEXT, hora_fim TEXT, horas DOUBLE PRECISION,
+            horimetro DOUBLE PRECISION, observacao TEXT
         )""")
-
         cur.execute("""CREATE TABLE IF NOT EXISTS usuarios(
-            id BIGSERIAL PRIMARY KEY,
-            nome TEXT NOT NULL,
-            usuario TEXT UNIQUE NOT NULL,
-            senha TEXT NOT NULL,
-            nivel TEXT NOT NULL,
-            equipe_id BIGINT,
-            status TEXT DEFAULT 'Ativo',
-            criado_em TEXT
+            id BIGSERIAL PRIMARY KEY, nome TEXT NOT NULL, usuario TEXT UNIQUE NOT NULL,
+            senha TEXT NOT NULL, nivel TEXT NOT NULL, equipe_id BIGINT,
+            status TEXT DEFAULT 'Ativo', criado_em TEXT
         )""")
-
-        # ------------------------------------------------------------
-        # 2) Colunas adicionadas em versões posteriores.
-        # ------------------------------------------------------------
-        colunas = {
-            "equipes": [
-                ("supervisor_id", "BIGINT"),
-                ("sondador_id", "BIGINT"),
-                ("auxiliar1_id", "BIGINT"),
-                ("auxiliar2_id", "BIGINT"),
-                ("auxiliar3_id", "BIGINT"),
-                ("status", "TEXT DEFAULT 'Ativa'")
-            ],
-            "sondas": [
-                ("modelo", "TEXT"), ("fabricante", "TEXT"),
-                ("patrimonio", "TEXT"), ("equipe_id", "BIGINT"),
-                ("status", "TEXT DEFAULT 'Operando'")
-            ],
-            "furos": [
-                ("projeto", "TEXT"), ("cliente", "TEXT"), ("local", "TEXT"),
-                ("coord_e", "DOUBLE PRECISION"), ("coord_n", "DOUBLE PRECISION"),
-                ("latitude", "DOUBLE PRECISION"), ("longitude", "DOUBLE PRECISION"),
-                ("cota", "DOUBLE PRECISION"), ("azimute", "DOUBLE PRECISION"),
-                ("dip", "DOUBLE PRECISION"), ("status", "TEXT DEFAULT 'Em andamento'")
-            ],
-            "boletins": [
-                ("data", "TEXT"), ("turno", "TEXT"), ("projeto", "TEXT"),
-                ("cliente", "TEXT"), ("sonda_id", "BIGINT"),
-                ("equipe_id", "BIGINT"), ("furo_id", "BIGINT"),
-                ("horimetro_inicial", "DOUBLE PRECISION"),
-                ("horimetro_final", "DOUBLE PRECISION"),
-                ("observacoes", "TEXT"), ("criado_em", "TEXT")
-            ],
-            "manobras": [
-                ("boletim_id", "BIGINT"), ("numero", "INTEGER"),
-                ("de_m", "DOUBLE PRECISION"), ("ate_m", "DOUBLE PRECISION"),
-                ("recuperado_m", "DOUBLE PRECISION"), ("dip", "DOUBLE PRECISION"),
-                ("qaqc", "TEXT"), ("perfil", "TEXT"), ("coroa", "TEXT"),
-                ("revestimento", "TEXT"), ("fluido", "TEXT")
-            ],
-            "apontamentos": [
-                ("boletim_id", "BIGINT"), ("codigo_atividade", "INTEGER"),
-                ("hora_inicio", "TEXT"), ("hora_fim", "TEXT"),
-                ("horas", "DOUBLE PRECISION"), ("horimetro", "DOUBLE PRECISION"),
-                ("observacao", "TEXT")
-            ],
-            "usuarios": [
-                ("nome", "TEXT"), ("usuario", "TEXT"), ("senha", "TEXT"),
-                ("nivel", "TEXT"), ("equipe_id", "BIGINT"),
-                ("status", "TEXT DEFAULT 'Ativo'"), ("criado_em", "TEXT")
-            ]
-        }
-
-        for tabela, itens in colunas.items():
-            for coluna, tipo in itens:
-                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}")
-
-        # ------------------------------------------------------------
-        # 3) Remove as FKs antigas do conjunto do sistema.
-        # ------------------------------------------------------------
-        cur.execute("""
-            SELECT DISTINCT tc.table_schema, tc.table_name, tc.constraint_name
-            FROM information_schema.table_constraints tc
-            JOIN information_schema.constraint_column_usage ccu
-              ON ccu.constraint_schema = tc.constraint_schema
-             AND ccu.constraint_name = tc.constraint_name
-            WHERE tc.constraint_type = 'FOREIGN KEY'
-              AND (tc.table_name = ANY(%s) OR ccu.table_name = ANY(%s))
-        """, (list(tabelas_sistema), list(tabelas_sistema)))
-
-        for schema, tabela, constraint in cur.fetchall():
-            cur.execute(
-                f'ALTER TABLE "{schema}"."{tabela}" DROP CONSTRAINT IF EXISTS "{constraint}"'
-            )
-
-        # ------------------------------------------------------------
-        # 4) Descobre o tipo REAL dos IDs existentes.
-        #    Não fazemos ALTER COLUMN id TYPE ... aqui.
-        # ------------------------------------------------------------
-        def tipo_coluna(tabela, coluna):
-            cur.execute("""
-                SELECT format_type(a.atttypid, a.atttypmod)
-                FROM pg_attribute a
-                JOIN pg_class c ON c.oid = a.attrelid
-                JOIN pg_namespace n ON n.oid = c.relnamespace
-                WHERE n.nspname = 'public'
-                  AND c.relname = %s
-                  AND a.attname = %s
-                  AND a.attnum > 0
-                  AND NOT a.attisdropped
-            """, (tabela, coluna))
-            row = cur.fetchone()
-            return row[0] if row else None
-
-        # ------------------------------------------------------------
-        # 5) Faz cada FK ter EXATAMENTE o mesmo tipo do ID referenciado.
-        #    Só altera uma FK se a conversão for numericamente segura.
-        # ------------------------------------------------------------
-        relacionamentos = [
-            ("manobras", "boletim_id", "boletins", "id"),
-            ("apontamentos", "boletim_id", "boletins", "id"),
-            ("sondas", "equipe_id", "equipes", "id"),
-            ("boletins", "sonda_id", "sondas", "id"),
-            ("boletins", "equipe_id", "equipes", "id"),
-            ("boletins", "furo_id", "furos", "id"),
-            ("usuarios", "equipe_id", "equipes", "id"),
-            ("equipes", "supervisor_id", "colaboradores", "id"),
-            ("equipes", "sondador_id", "colaboradores", "id"),
-            ("equipes", "auxiliar1_id", "colaboradores", "id"),
-            ("equipes", "auxiliar2_id", "colaboradores", "id"),
-            ("equipes", "auxiliar3_id", "colaboradores", "id")
-        ]
-
-        tipos_numericos = {"smallint", "integer", "bigint"}
-        limites = {
-            "smallint": (-(2**15), 2**15 - 1),
-            "integer": (-(2**31), 2**31 - 1),
-            "bigint": (-(2**63), 2**63 - 1),
-        }
-
-        for filha, fk, pai, idcol in relacionamentos:
-            tipo_pai = tipo_coluna(pai, idcol)
-            tipo_filha = tipo_coluna(filha, fk)
-
-            if not tipo_pai or not tipo_filha or tipo_pai == tipo_filha:
-                continue
-
-            # Só fazemos migração automática entre tipos inteiros.
-            # UUID/texto/etc. não são convertidos para BIGINT.
-            if tipo_pai not in tipos_numericos or tipo_filha not in tipos_numericos:
-                continue
-
-            # Verifica se os valores existentes da FK cabem no tipo do pai.
-            minimo, maximo = limites[tipo_pai]
-            cur.execute(
-                f"""SELECT COUNT(*) FROM {filha}
-                    WHERE {fk} IS NOT NULL
-                      AND ({fk} < %s OR {fk} > %s)""",
-                (minimo, maximo)
-            )
-            fora = cur.fetchone()[0]
-            if fora:
-                continue
-
-            cur.execute(
-                f"ALTER TABLE {filha} ALTER COLUMN {fk} TYPE {tipo_pai} USING {fk}::{tipo_pai}"
-            )
-
-        # ------------------------------------------------------------
-        # 6) Recria apenas as duas FKs críticas do fluxo de boletins.
-        #    Só cria se os tipos forem iguais.
-        # ------------------------------------------------------------
-        for nome, tabela_filha, coluna_filha in [
-            ("fk_manobras_boletim", "manobras", "boletim_id"),
-            ("fk_apontamentos_boletim", "apontamentos", "boletim_id")
-        ]:
-            tipo_pai = tipo_coluna("boletins", "id")
-            tipo_filha = tipo_coluna(tabela_filha, coluna_filha)
-
-            if tipo_pai and tipo_filha and tipo_pai == tipo_filha:
-                cur.execute(
-                    f"""ALTER TABLE {tabela_filha}
-                        ADD CONSTRAINT {nome}
-                        FOREIGN KEY ({coluna_filha}) REFERENCES boletins(id)
-                        ON DELETE CASCADE NOT VALID"""
-                )
-
         c.commit()
-
-    except Exception:
-        c.rollback()
-        raise
     finally:
         c.close()
 
     seed_activities()
-
     if query("SELECT COUNT(*) AS total FROM usuarios WHERE usuario='admin'").iloc[0]["total"] == 0:
         execute("""
             INSERT INTO usuarios(nome,usuario,senha,nivel,status,criado_em)
@@ -1038,7 +789,7 @@ def excel_boletim(boletim_id):
     ap = query("""
         SELECT p.*, a.grupo, a.atividade, a.classificacao
         FROM apontamentos p
-        LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+        LEFT JOIN atividades a ON a.codigo::text=p.codigo_atividade::text
         WHERE p.boletim_id=?
         ORDER BY p.id
     """, (int(boletim_id),))
@@ -1230,7 +981,7 @@ def excel_consolidado():
         SELECT p.boletim_id,
                COALESCE(SUM(CASE
                    WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA'
-                         OR p.codigo_atividade IN (14,15,16,17,18))
+                         OR p.codigo_atividade::text IN ('14','15','16','17','18'))
                    THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_operacao,
                COALESCE(SUM(CASE
                    WHEN TRIM(UPPER(COALESCE(a.classificacao,'')))='MANUTENÇÃO PREVENTIVA'
@@ -1243,7 +994,7 @@ def excel_consolidado():
                    THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_parada_externa,
                COALESCE(SUM(COALESCE(p.horas,0)),0) AS horas_apontadas
         FROM apontamentos p
-        LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+        LEFT JOIN atividades a ON a.codigo::text=p.codigo_atividade::text
         GROUP BY p.boletim_id
     """)
 
@@ -1355,7 +1106,7 @@ def excel_consolidado():
     tempo=query("""
         SELECT COALESCE(NULLIF(TRIM(a.classificacao),''),'SEM CLASSIFICAÇÃO') AS Classificação,
                SUM(COALESCE(p.horas,0)) AS Horas
-        FROM apontamentos p LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+        FROM apontamentos p LEFT JOIN atividades a ON a.codigo::text=p.codigo_atividade::text
         GROUP BY COALESCE(NULLIF(TRIM(a.classificacao),''),'SEM CLASSIFICAÇÃO')
         ORDER BY Horas DESC
     """)
@@ -1550,12 +1301,12 @@ if page == "🏠 Painel DDH":
             SELECT b.equipe_id,
                    SUM(CASE WHEN (
                        TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA'
-                       OR p.codigo_atividade IN (14,15,16,17,18)
+                       OR p.codigo_atividade::text IN ('14','15','16','17','18')
                    )
                    THEN COALESCE(p.horas,0) ELSE 0 END) horas_operacao
             FROM boletins b
             LEFT JOIN apontamentos p ON p.boletim_id=b.id
-            LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+            LEFT JOIN atividades a ON a.codigo::text=p.codigo_atividade::text
             GROUP BY b.equipe_id
         ) h ON h.equipe_id=e.id
         LEFT JOIN (
@@ -1698,11 +1449,11 @@ if page == "🏠 Painel DDH":
         ) m ON m.sonda_id=s.id
         LEFT JOIN (
             SELECT b.sonda_id,
-                   SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
+                   SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade::text IN ('14','15','16','17','18'))
                        THEN COALESCE(p.horas,0) ELSE 0 END) horas_operacao
             FROM boletins b
             LEFT JOIN apontamentos p ON p.boletim_id=b.id
-            LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+            LEFT JOIN atividades a ON a.codigo::text=p.codigo_atividade::text
             GROUP BY b.sonda_id
         ) h ON h.sonda_id=s.id
         WHERE s.status!='Inativa'
@@ -2009,7 +1760,7 @@ elif page == "📝 Novo Boletim":
                    a.classificacao,p.hora_inicio,p.hora_fim,p.horas,
                    p.horimetro,p.observacao
             FROM apontamentos p
-            LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+            LEFT JOIN atividades a ON a.codigo::text=p.codigo_atividade::text
             WHERE p.boletim_id=?
             ORDER BY p.id
         """, (bid,))
@@ -2080,11 +1831,11 @@ elif page == "📅 Produção Diária":
 
         horas = query("""
             SELECT b.id AS boletim_id,
-                   COALESCE(SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
+                   COALESCE(SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade::text IN ('14','15','16','17','18'))
                        THEN COALESCE(p.horas,0) ELSE 0 END),0) AS horas_operacao
             FROM boletins b
             LEFT JOIN apontamentos p ON p.boletim_id=b.id
-            LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+            LEFT JOIN atividades a ON a.codigo::text=p.codigo_atividade::text
             WHERE b.data=?
             GROUP BY b.id
         """, (str(data_filtro),))
@@ -3182,11 +2933,11 @@ elif page == "🛠️ Gerenciamento":
             ) m ON m.equipe_id=e.id
             LEFT JOIN (
                 SELECT b.equipe_id,
-                       SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade IN (14,15,16,17,18))
+                       SUM(CASE WHEN (TRIM(UPPER(COALESCE(a.classificacao,'')))='OPERAÇÃO DIRETA' OR p.codigo_atividade::text IN ('14','15','16','17','18'))
                            THEN COALESCE(p.horas,0) ELSE 0 END) horas_operacao
                 FROM boletins b
                 LEFT JOIN apontamentos p ON p.boletim_id=b.id
-                LEFT JOIN atividades a ON a.codigo=p.codigo_atividade
+                LEFT JOIN atividades a ON a.codigo::text=p.codigo_atividade::text
                 GROUP BY b.equipe_id
             ) h ON h.equipe_id=e.id
             ORDER BY metros DESC
