@@ -640,37 +640,103 @@ def _garantir_schema_boletins_bigint(cur):
     """)
 
 def restaurar_backup_postgres(caminho):
+    """
+    Restaura um backup DDH com proteções para evitar sobrescrever dados novos
+    por acidente. A restauração só é permitida quando as tabelas operacionais
+    atuais estão vazias. O backup atual é criado antes da alteração e toda a
+    restauração ocorre dentro de uma única transação.
+    """
     payload = validar_backup_postgres(caminho)
     tabelas = payload["tabelas"]
+
+    # Validação estrutural mínima antes de tocar no banco.
+    obrigatorias = set(BACKUP_TABLES)
+    ausentes = sorted(obrigatorias - set(tabelas.keys()))
+    if ausentes:
+        raise ValueError(
+            "Backup incompleto. Tabelas ausentes: " + ", ".join(ausentes)
+        )
+
     c = conn()
     try:
         cur = c.cursor()
 
-        # O backup enviado usa IDs inteiros. Se a implantação atual tiver
-        # boletins.id UUID, normalizamos primeiro, sem destruir os dados atuais.
+        # Corrige a estrutura UUID -> BIGINT, se ainda necessário.
         _garantir_schema_boletins_bigint(cur)
 
-        # A restauração é explicitamente solicitada pelo administrador e substitui
-        # os dados atuais. O chamador cria um backup lógico antes desta função.
-        cur.execute("TRUNCATE TABLE apontamentos, manobras, boletins, usuarios, sondas, equipes, furos, colaboradores, atividades RESTART IDENTITY CASCADE")
+        # Proteção principal: não sobrescreve dados operacionais que tenham
+        # surgido depois da implantação. Usuários podem existir (ex.: admin
+        # criado na inicialização); nesse caso serão substituídos pelo usuário
+        # contido no backup, dentro da mesma transação.
+        operacionais = [
+            "colaboradores", "equipes", "sondas", "furos",
+            "boletins", "manobras", "apontamentos"
+        ]
+        ocupadas = []
+        for tabela in operacionais:
+            cur.execute(f"SELECT COUNT(*) FROM {tabela}")
+            qtd = int(cur.fetchone()[0])
+            if qtd:
+                ocupadas.append(f"{tabela}={qtd}")
+
+        if ocupadas:
+            raise RuntimeError(
+                "Restauração bloqueada para proteger dados atuais. "
+                "Existem registros nas tabelas operacionais: "
+                + ", ".join(ocupadas)
+                + ". Crie/baixe um backup desses dados antes de restaurar."
+            )
+
+        # Cria uma cópia lógica automática do estado atual antes de qualquer
+        # alteração. O usuário também cria um backup pela interface antes desta
+        # função; esta segunda proteção mantém a rotina segura se for reutilizada.
+        try:
+            criar_backup("antes_restauracao_segura")
+        except Exception as e:
+            raise RuntimeError(
+                f"Não foi possível criar o backup de segurança antes da restauração: {e}"
+            )
+
+        # Como as tabelas operacionais foram verificadas como vazias, a limpeza
+        # abaixo não apaga registros operacionais existentes. Ela também mantém
+        # a restauração transacional: qualquer erro posterior faz ROLLBACK.
+        cur.execute(
+            "TRUNCATE TABLE apontamentos, manobras, boletins, usuarios, "
+            "sondas, equipes, furos, colaboradores, atividades "
+            "RESTART IDENTITY CASCADE"
+        )
 
         # Importa em ordem de dependência.
-        for tabela in ["colaboradores", "equipes", "sondas", "furos", "atividades", "boletins", "manobras", "apontamentos", "usuarios"]:
+        ordem = [
+            "colaboradores", "equipes", "sondas", "furos", "atividades",
+            "boletins", "manobras", "apontamentos", "usuarios"
+        ]
+        for tabela in ordem:
             rows = tabelas.get(tabela, [])
             if not rows:
                 continue
+
             cols = list(rows[0].keys())
             placeholders = ",".join(["%s"] * len(cols))
             sql = f'INSERT INTO {tabela} ({",".join(cols)}) VALUES ({placeholders})'
             values = [tuple(row.get(col) for col in cols) for row in rows]
             cur.executemany(sql, values)
 
-        # Reajusta as sequências após restaurar IDs explícitos.
-        for tabela in ["colaboradores", "equipes", "sondas", "furos", "boletins", "manobras", "apontamentos", "usuarios"]:
+        # Reajusta as sequências após restaurar IDs explícitos. Quando a tabela
+        # estiver vazia, a sequência fica pronta para gerar o ID 1.
+        for tabela in [
+            "colaboradores", "equipes", "sondas", "furos", "boletins",
+            "manobras", "apontamentos", "usuarios"
+        ]:
             cur.execute("SELECT pg_get_serial_sequence(%s, 'id')", (tabela,))
             seq = cur.fetchone()[0]
             if seq:
-                cur.execute(f"SELECT setval('{seq}', COALESCE((SELECT MAX(id) FROM {tabela}), 1), true)")
+                cur.execute(
+                    f"SELECT setval('{seq}', "
+                    f"COALESCE((SELECT MAX(id) FROM {tabela}), 1), "
+                    f"EXISTS(SELECT 1 FROM {tabela}))"
+                )
+
         c.commit()
     except Exception:
         c.rollback()
