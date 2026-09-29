@@ -563,14 +563,104 @@ def validar_backup_postgres(caminho):
         raise ValueError("Estrutura de backup inválida.")
     return payload
 
+def _tipo_coluna_publica(cur, tabela, coluna):
+    cur.execute("""
+        SELECT data_type, udt_name
+        FROM information_schema.columns
+        WHERE table_schema='public' AND table_name=%s AND column_name=%s
+    """, (tabela, coluna))
+    return cur.fetchone()
+
+def _remover_fks_para_boletins(cur):
+    cur.execute("""
+        SELECT conrelid::regclass::text, conname
+        FROM pg_constraint
+        WHERE contype='f'
+          AND confrelid='public.boletins'::regclass
+    """)
+    for tabela, nome in cur.fetchall():
+        cur.execute(f'ALTER TABLE {tabela} DROP CONSTRAINT IF EXISTS "{nome}"')
+
+def _garantir_schema_boletins_bigint(cur):
+    """
+    Corrige uma implantação anterior em que boletins.id ficou UUID enquanto
+    manobras/apontamentos usam BIGINT. Não apaga dados silenciosamente:
+    cria uma cópia lógica antes da conversão e só converte automaticamente
+    quando as tabelas filhas estão vazias, pois não existe relação válida
+    entre UUID e BIGINT para inferir com segurança.
+    """
+    tipo = _tipo_coluna_publica(cur, "boletins", "id")
+    if not tipo:
+        return
+    data_type, udt_name = tipo
+    if udt_name != "uuid":
+        return
+
+    cur.execute("SELECT COUNT(*) FROM manobras")
+    qtd_man = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM apontamentos")
+    qtd_ap = cur.fetchone()[0]
+    if qtd_man or qtd_ap:
+        raise RuntimeError(
+            "O PostgreSQL possui boletins.id como UUID, mas manobras/apontamentos "
+            "usam BIGINT e já possuem dados. A conversão automática foi bloqueada "
+            "para evitar perda de relacionamentos. Restaure o backup DDH antes de continuar."
+        )
+
+    # Guarda os dados atuais em uma tabela de arquivo dentro do próprio banco.
+    # Isso é adicional ao backup lógico JSON e permite recuperar os 2 boletins atuais.
+    nome_backup = "boletins_uuid_backup_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+    _remover_fks_para_boletins(cur)
+    cur.execute(f'ALTER TABLE boletins RENAME TO "{nome_backup}"')
+
+    cur.execute("""CREATE TABLE boletins(
+        id BIGSERIAL PRIMARY KEY, data TEXT NOT NULL, turno TEXT, projeto TEXT, cliente TEXT,
+        sonda_id BIGINT, equipe_id BIGINT, furo_id BIGINT, horimetro_inicial DOUBLE PRECISION,
+        horimetro_final DOUBLE PRECISION, observacoes TEXT, criado_em TEXT
+    )""")
+
+    cur.execute(f"""
+        INSERT INTO boletins(
+            id,data,turno,projeto,cliente,sonda_id,equipe_id,furo_id,
+            horimetro_inicial,horimetro_final,observacoes,criado_em
+        )
+        SELECT
+            ROW_NUMBER() OVER (ORDER BY id), data,turno,projeto,cliente,sonda_id,equipe_id,furo_id,
+            horimetro_inicial,horimetro_final,observacoes,criado_em
+        FROM "{nome_backup}"
+    """)
+
+    cur.execute("SELECT setval(pg_get_serial_sequence('boletins','id'), COALESCE((SELECT MAX(id) FROM boletins),1), true)")
+
+    # Recria as FKs corretas, agora com BIGINT nos três lados.
+    cur.execute("""
+        ALTER TABLE manobras
+        ADD CONSTRAINT fk_manobras_boletim
+        FOREIGN KEY (boletim_id) REFERENCES boletins(id) ON DELETE CASCADE
+    """)
+    cur.execute("""
+        ALTER TABLE apontamentos
+        ADD CONSTRAINT fk_apontamentos_boletim
+        FOREIGN KEY (boletim_id) REFERENCES boletins(id) ON DELETE CASCADE
+    """)
+
 def restaurar_backup_postgres(caminho):
     payload = validar_backup_postgres(caminho)
     tabelas = payload["tabelas"]
     c = conn()
     try:
         cur = c.cursor()
+
+        # O backup enviado usa IDs inteiros. Se a implantação atual tiver
+        # boletins.id UUID, normalizamos primeiro, sem destruir os dados atuais.
+        _garantir_schema_boletins_bigint(cur)
+
+        # A restauração é explicitamente solicitada pelo administrador e substitui
+        # os dados atuais. O chamador cria um backup lógico antes desta função.
         cur.execute("TRUNCATE TABLE apontamentos, manobras, boletins, usuarios, sondas, equipes, furos, colaboradores, atividades RESTART IDENTITY CASCADE")
-        for tabela in BACKUP_TABLES:
+
+        # Importa em ordem de dependência.
+        for tabela in ["colaboradores", "equipes", "sondas", "furos", "atividades", "boletins", "manobras", "apontamentos", "usuarios"]:
             rows = tabelas.get(tabela, [])
             if not rows:
                 continue
@@ -579,6 +669,7 @@ def restaurar_backup_postgres(caminho):
             sql = f'INSERT INTO {tabela} ({",".join(cols)}) VALUES ({placeholders})'
             values = [tuple(row.get(col) for col in cols) for row in rows]
             cur.executemany(sql, values)
+
         # Reajusta as sequências após restaurar IDs explícitos.
         for tabela in ["colaboradores", "equipes", "sondas", "furos", "boletins", "manobras", "apontamentos", "usuarios"]:
             cur.execute("SELECT pg_get_serial_sequence(%s, 'id')", (tabela,))
@@ -738,6 +829,9 @@ def init_db():
             senha TEXT NOT NULL, nivel TEXT NOT NULL, equipe_id BIGINT,
             status TEXT DEFAULT 'Ativo', criado_em TEXT
         )""")
+        # Corrige automaticamente apenas a incompatibilidade UUID x BIGINT
+        # conhecida, preservando os boletins atuais em uma tabela de arquivo.
+        _garantir_schema_boletins_bigint(cur)
         c.commit()
     finally:
         c.close()
@@ -1996,8 +2090,6 @@ elif page == "📋 Boletins Salvos":
         )
 
         if c3.button("🗑️ Excluir boletim", use_container_width=True):
-            execute("DELETE FROM manobras WHERE boletim_id=?", (int(bid),))
-            execute("DELETE FROM apontamentos WHERE boletim_id=?", (int(bid),))
             delete("boletins", bid)
             if st.session_state.boletim_edit_id == int(bid):
                 st.session_state.boletim_edit_id = None
