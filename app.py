@@ -687,19 +687,17 @@ def seed_activities():
         c.close()
 
 def init_db():
-    """Inicializa e faz a migração segura do PostgreSQL do DDH CAMPO.
+    """Inicializa o PostgreSQL sem alterar IDs existentes de forma forçada.
 
-    A versão anterior criava manobras/apontamentos com boletim_id BIGINT
-    diretamente. Se o PostgreSQL já possuía boletins.id como INTEGER de uma
-    versão antiga, a criação da FK falhava com psycopg2.errors.DatatypeMismatch.
+    Compatibilidade importante:
+    - bancos antigos podem ter SERIAL/INTEGER;
+    - versões novas podem ter BIGSERIAL/BIGINT;
+    - o PostgreSQL não aceita FK entre tipos diferentes.
 
-    Esta rotina:
-      1. cria as tabelas sem FKs inicialmente;
-      2. garante as colunas usadas pelo aplicativo;
-      3. remove temporariamente as FKs do conjunto de tabelas do sistema;
-      4. padroniza IDs e chaves estrangeiras em BIGINT;
-      5. recria as FKs de manobras/apontamentos;
-      6. preserva os dados existentes.
+    Portanto, esta rotina NÃO executa mais `id::bigint` sobre IDs existentes.
+    Ela mantém o tipo do ID pai e ajusta somente as colunas FK quando a
+    conversão é segura. Assim evitamos o CannotCoerce que estava derrubando
+    o aplicativo.
     """
     tabelas_sistema = {
         "colaboradores", "equipes", "sondas", "furos", "atividades",
@@ -711,8 +709,7 @@ def init_db():
         cur = c.cursor()
 
         # ------------------------------------------------------------
-        # 1) Criação inicial SEM chaves estrangeiras.
-        #    Isso permite migrar bancos antigos sem DataTypeMismatch.
+        # 1) Criação das tabelas SEM FKs.
         # ------------------------------------------------------------
         cur.execute("""CREATE TABLE IF NOT EXISTS colaboradores(
             id BIGSERIAL PRIMARY KEY,
@@ -820,8 +817,7 @@ def init_db():
         )""")
 
         # ------------------------------------------------------------
-        # 2) Compatibilidade com versões anteriores.
-        #    ADD COLUMN IF NOT EXISTS não altera dados existentes.
+        # 2) Colunas adicionadas em versões posteriores.
         # ------------------------------------------------------------
         colunas = {
             "equipes": [
@@ -833,168 +829,158 @@ def init_db():
                 ("status", "TEXT DEFAULT 'Ativa'")
             ],
             "sondas": [
-                ("modelo", "TEXT"),
-                ("fabricante", "TEXT"),
-                ("patrimonio", "TEXT"),
-                ("equipe_id", "BIGINT"),
+                ("modelo", "TEXT"), ("fabricante", "TEXT"),
+                ("patrimonio", "TEXT"), ("equipe_id", "BIGINT"),
                 ("status", "TEXT DEFAULT 'Operando'")
             ],
             "furos": [
-                ("projeto", "TEXT"),
-                ("cliente", "TEXT"),
-                ("local", "TEXT"),
-                ("coord_e", "DOUBLE PRECISION"),
-                ("coord_n", "DOUBLE PRECISION"),
-                ("latitude", "DOUBLE PRECISION"),
-                ("longitude", "DOUBLE PRECISION"),
-                ("cota", "DOUBLE PRECISION"),
-                ("azimute", "DOUBLE PRECISION"),
-                ("dip", "DOUBLE PRECISION"),
-                ("status", "TEXT DEFAULT 'Em andamento'")
+                ("projeto", "TEXT"), ("cliente", "TEXT"), ("local", "TEXT"),
+                ("coord_e", "DOUBLE PRECISION"), ("coord_n", "DOUBLE PRECISION"),
+                ("latitude", "DOUBLE PRECISION"), ("longitude", "DOUBLE PRECISION"),
+                ("cota", "DOUBLE PRECISION"), ("azimute", "DOUBLE PRECISION"),
+                ("dip", "DOUBLE PRECISION"), ("status", "TEXT DEFAULT 'Em andamento'")
             ],
             "boletins": [
-                ("data", "TEXT"),
-                ("turno", "TEXT"),
-                ("projeto", "TEXT"),
-                ("cliente", "TEXT"),
-                ("sonda_id", "BIGINT"),
-                ("equipe_id", "BIGINT"),
-                ("furo_id", "BIGINT"),
+                ("data", "TEXT"), ("turno", "TEXT"), ("projeto", "TEXT"),
+                ("cliente", "TEXT"), ("sonda_id", "BIGINT"),
+                ("equipe_id", "BIGINT"), ("furo_id", "BIGINT"),
                 ("horimetro_inicial", "DOUBLE PRECISION"),
                 ("horimetro_final", "DOUBLE PRECISION"),
-                ("observacoes", "TEXT"),
-                ("criado_em", "TEXT")
+                ("observacoes", "TEXT"), ("criado_em", "TEXT")
             ],
             "manobras": [
-                ("boletim_id", "BIGINT"),
-                ("numero", "INTEGER"),
-                ("de_m", "DOUBLE PRECISION"),
-                ("ate_m", "DOUBLE PRECISION"),
-                ("recuperado_m", "DOUBLE PRECISION"),
-                ("dip", "DOUBLE PRECISION"),
-                ("qaqc", "TEXT"),
-                ("perfil", "TEXT"),
-                ("coroa", "TEXT"),
-                ("revestimento", "TEXT"),
-                ("fluido", "TEXT")
+                ("boletim_id", "BIGINT"), ("numero", "INTEGER"),
+                ("de_m", "DOUBLE PRECISION"), ("ate_m", "DOUBLE PRECISION"),
+                ("recuperado_m", "DOUBLE PRECISION"), ("dip", "DOUBLE PRECISION"),
+                ("qaqc", "TEXT"), ("perfil", "TEXT"), ("coroa", "TEXT"),
+                ("revestimento", "TEXT"), ("fluido", "TEXT")
             ],
             "apontamentos": [
-                ("boletim_id", "BIGINT"),
-                ("codigo_atividade", "INTEGER"),
-                ("hora_inicio", "TEXT"),
-                ("hora_fim", "TEXT"),
-                ("horas", "DOUBLE PRECISION"),
-                ("horimetro", "DOUBLE PRECISION"),
+                ("boletim_id", "BIGINT"), ("codigo_atividade", "INTEGER"),
+                ("hora_inicio", "TEXT"), ("hora_fim", "TEXT"),
+                ("horas", "DOUBLE PRECISION"), ("horimetro", "DOUBLE PRECISION"),
                 ("observacao", "TEXT")
             ],
             "usuarios": [
-                ("nome", "TEXT"),
-                ("usuario", "TEXT"),
-                ("senha", "TEXT"),
-                ("nivel", "TEXT"),
-                ("equipe_id", "BIGINT"),
-                ("status", "TEXT DEFAULT 'Ativo'"),
-                ("criado_em", "TEXT")
+                ("nome", "TEXT"), ("usuario", "TEXT"), ("senha", "TEXT"),
+                ("nivel", "TEXT"), ("equipe_id", "BIGINT"),
+                ("status", "TEXT DEFAULT 'Ativo'"), ("criado_em", "TEXT")
             ]
         }
 
         for tabela, itens in colunas.items():
             for coluna, tipo in itens:
-                cur.execute(
-                    f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}"
-                )
+                cur.execute(f"ALTER TABLE {tabela} ADD COLUMN IF NOT EXISTS {coluna} {tipo}")
 
         # ------------------------------------------------------------
-        # 3) Remove temporariamente FKs que envolvam as tabelas do DDH.
-        #    Sem isso, PostgreSQL pode impedir a alteração INTEGER -> BIGINT.
+        # 3) Remove as FKs antigas do conjunto do sistema.
         # ------------------------------------------------------------
         cur.execute("""
-            SELECT DISTINCT
-                   tc.table_schema,
-                   tc.table_name,
-                   tc.constraint_name
+            SELECT DISTINCT tc.table_schema, tc.table_name, tc.constraint_name
             FROM information_schema.table_constraints tc
             JOIN information_schema.constraint_column_usage ccu
               ON ccu.constraint_schema = tc.constraint_schema
              AND ccu.constraint_name = tc.constraint_name
             WHERE tc.constraint_type = 'FOREIGN KEY'
-              AND (
-                    tc.table_name = ANY(%s)
-                    OR ccu.table_name = ANY(%s)
-                  )
+              AND (tc.table_name = ANY(%s) OR ccu.table_name = ANY(%s))
         """, (list(tabelas_sistema), list(tabelas_sistema)))
 
-        fks = cur.fetchall()
-        for schema, tabela, constraint in fks:
+        for schema, tabela, constraint in cur.fetchall():
             cur.execute(
                 f'ALTER TABLE "{schema}"."{tabela}" DROP CONSTRAINT IF EXISTS "{constraint}"'
             )
 
         # ------------------------------------------------------------
-        # 4) Padroniza TODOS os IDs principais e FKs como BIGINT.
-        #    O problema atual é justamente uma diferença INTEGER/BIGINT.
+        # 4) Descobre o tipo REAL dos IDs existentes.
+        #    Não fazemos ALTER COLUMN id TYPE ... aqui.
         # ------------------------------------------------------------
-        ids_principais = [
-            "colaboradores", "equipes", "sondas", "furos",
-            "boletins", "manobras", "apontamentos", "usuarios"
-        ]
-
-        for tabela in ids_principais:
-            cur.execute(
-                f"ALTER TABLE {tabela} ALTER COLUMN id TYPE BIGINT USING id::bigint"
-            )
-
-        fks_bigint = [
-            ("equipes", "supervisor_id"),
-            ("equipes", "sondador_id"),
-            ("equipes", "auxiliar1_id"),
-            ("equipes", "auxiliar2_id"),
-            ("equipes", "auxiliar3_id"),
-            ("sondas", "equipe_id"),
-            ("boletins", "sonda_id"),
-            ("boletins", "equipe_id"),
-            ("boletins", "furo_id"),
-            ("manobras", "boletim_id"),
-            ("apontamentos", "boletim_id"),
-            ("usuarios", "equipe_id")
-        ]
-
-        for tabela, coluna in fks_bigint:
-            cur.execute(
-                f"ALTER TABLE {tabela} ALTER COLUMN {coluna} TYPE BIGINT USING {coluna}::bigint"
-            )
-
-        # ------------------------------------------------------------
-        # 5) Garante que as sequências associadas aos IDs possam crescer
-        #    como BIGINT. Isso é importante se o banco veio de SERIAL antigo.
-        # ------------------------------------------------------------
-        for tabela in ids_principais:
-            cur.execute("SELECT pg_get_serial_sequence(%s, 'id')", (tabela,))
+        def tipo_coluna(tabela, coluna):
+            cur.execute("""
+                SELECT format_type(a.atttypid, a.atttypmod)
+                FROM pg_attribute a
+                JOIN pg_class c ON c.oid = a.attrelid
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = 'public'
+                  AND c.relname = %s
+                  AND a.attname = %s
+                  AND a.attnum > 0
+                  AND NOT a.attisdropped
+            """, (tabela, coluna))
             row = cur.fetchone()
-            seq = row[0] if row else None
-            if seq:
-                cur.execute(f"ALTER SEQUENCE {seq} AS BIGINT")
+            return row[0] if row else None
 
         # ------------------------------------------------------------
-        # 6) Recria as FKs essenciais.
-        #    NOT VALID permite recuperar um banco antigo mesmo se existirem
-        #    registros históricos órfãos; novos registros continuam protegidos.
+        # 5) Faz cada FK ter EXATAMENTE o mesmo tipo do ID referenciado.
+        #    Só altera uma FK se a conversão for numericamente segura.
         # ------------------------------------------------------------
-        cur.execute("""
-            ALTER TABLE manobras
-            ADD CONSTRAINT fk_manobras_boletim
-            FOREIGN KEY (boletim_id) REFERENCES boletins(id)
-            ON DELETE CASCADE
-            NOT VALID
-        """)
+        relacionamentos = [
+            ("manobras", "boletim_id", "boletins", "id"),
+            ("apontamentos", "boletim_id", "boletins", "id"),
+            ("sondas", "equipe_id", "equipes", "id"),
+            ("boletins", "sonda_id", "sondas", "id"),
+            ("boletins", "equipe_id", "equipes", "id"),
+            ("boletins", "furo_id", "furos", "id"),
+            ("usuarios", "equipe_id", "equipes", "id"),
+            ("equipes", "supervisor_id", "colaboradores", "id"),
+            ("equipes", "sondador_id", "colaboradores", "id"),
+            ("equipes", "auxiliar1_id", "colaboradores", "id"),
+            ("equipes", "auxiliar2_id", "colaboradores", "id"),
+            ("equipes", "auxiliar3_id", "colaboradores", "id")
+        ]
 
-        cur.execute("""
-            ALTER TABLE apontamentos
-            ADD CONSTRAINT fk_apontamentos_boletim
-            FOREIGN KEY (boletim_id) REFERENCES boletins(id)
-            ON DELETE CASCADE
-            NOT VALID
-        """)
+        tipos_numericos = {"smallint", "integer", "bigint"}
+        limites = {
+            "smallint": (-(2**15), 2**15 - 1),
+            "integer": (-(2**31), 2**31 - 1),
+            "bigint": (-(2**63), 2**63 - 1),
+        }
+
+        for filha, fk, pai, idcol in relacionamentos:
+            tipo_pai = tipo_coluna(pai, idcol)
+            tipo_filha = tipo_coluna(filha, fk)
+
+            if not tipo_pai or not tipo_filha or tipo_pai == tipo_filha:
+                continue
+
+            # Só fazemos migração automática entre tipos inteiros.
+            # UUID/texto/etc. não são convertidos para BIGINT.
+            if tipo_pai not in tipos_numericos or tipo_filha not in tipos_numericos:
+                continue
+
+            # Verifica se os valores existentes da FK cabem no tipo do pai.
+            minimo, maximo = limites[tipo_pai]
+            cur.execute(
+                f"""SELECT COUNT(*) FROM {filha}
+                    WHERE {fk} IS NOT NULL
+                      AND ({fk} < %s OR {fk} > %s)""",
+                (minimo, maximo)
+            )
+            fora = cur.fetchone()[0]
+            if fora:
+                continue
+
+            cur.execute(
+                f"ALTER TABLE {filha} ALTER COLUMN {fk} TYPE {tipo_pai} USING {fk}::{tipo_pai}"
+            )
+
+        # ------------------------------------------------------------
+        # 6) Recria apenas as duas FKs críticas do fluxo de boletins.
+        #    Só cria se os tipos forem iguais.
+        # ------------------------------------------------------------
+        for nome, tabela_filha, coluna_filha in [
+            ("fk_manobras_boletim", "manobras", "boletim_id"),
+            ("fk_apontamentos_boletim", "apontamentos", "boletim_id")
+        ]:
+            tipo_pai = tipo_coluna("boletins", "id")
+            tipo_filha = tipo_coluna(tabela_filha, coluna_filha)
+
+            if tipo_pai and tipo_filha and tipo_pai == tipo_filha:
+                cur.execute(
+                    f"""ALTER TABLE {tabela_filha}
+                        ADD CONSTRAINT {nome}
+                        FOREIGN KEY ({coluna_filha}) REFERENCES boletins(id)
+                        ON DELETE CASCADE NOT VALID"""
+                )
 
         c.commit()
 
@@ -1004,7 +990,6 @@ def init_db():
     finally:
         c.close()
 
-    # Dados-base e usuário inicial.
     seed_activities()
 
     if query("SELECT COUNT(*) AS total FROM usuarios WHERE usuario='admin'").iloc[0]["total"] == 0:
@@ -1015,7 +1000,6 @@ def init_db():
             "Administrador", "admin", hash_senha("admin123"),
             "Administrador", "Ativo", datetime.now().isoformat()
         ))
-
 
 init_db()
 
