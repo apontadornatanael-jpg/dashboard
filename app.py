@@ -619,18 +619,13 @@ def _garantir_schema_boletins_bigint(cur):
         horimetro_final DOUBLE PRECISION, observacoes TEXT, criado_em TEXT
     )""")
 
-    cur.execute(f"""
-        INSERT INTO boletins(
-            id,data,turno,projeto,cliente,sonda_id,equipe_id,furo_id,
-            horimetro_inicial,horimetro_final,observacoes,criado_em
-        )
-        SELECT
-            ROW_NUMBER() OVER (ORDER BY id), data,turno,projeto,cliente,sonda_id,equipe_id,furo_id,
-            horimetro_inicial,horimetro_final,observacoes,criado_em
-        FROM "{nome_backup}"
-    """)
-
-    cur.execute("SELECT setval(pg_get_serial_sequence('boletins','id'), COALESCE((SELECT MAX(id) FROM boletins),1), true)")
+    # NÃO copia automaticamente os registros da tabela UUID para a tabela BIGINT.
+    # Uma conversão UUID -> BIGINT não é reversível nem permite reconstruir com
+    # segurança os vínculos sonda/equipe/furo. A tabela renomeada permanece no
+    # PostgreSQL como arquivo de segurança e poderá ser consultada posteriormente.
+    # Os dados oficiais serão restaurados pelo backup DDH, que possui IDs BIGINT
+    # consistentes entre boletins, manobras e apontamentos.
+    cur.execute("SELECT setval(pg_get_serial_sequence('boletins','id'), 1, false)")
 
     # Recria as FKs corretas, agora com BIGINT nos três lados.
     cur.execute("""
